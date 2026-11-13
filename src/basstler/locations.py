@@ -213,6 +213,12 @@ class SiteTemplate(PathEnumeration):
     browser, and shows when the page was last refreshed.
     """
 
+    APPEARANCE_SCRIPT = PackageLocation.TEMPLATES.value / "site_appearance.js"
+    """
+    The script every site page applies the viewer's theme and colour scheme with
+    before it is drawn, and keeps a new pick with.
+    """
+
 
 class BasstlerVariable(EnvironmentVariable):
     """

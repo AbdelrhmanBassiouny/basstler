@@ -12,10 +12,17 @@ Usage:
         [--registry <owner/repo>] [--site-url <url>] --output <out>
     python3 -m basstler.plan_site.hub page-url --hub <hub.yaml> --repository <owner/repo> \\
         [--plan <plan-id> [--item <item-id>]]
+    python3 -m basstler.plan_site.hub add-theme --hub <hub.yaml> --theme <theme.yaml> \\
+        [--default] --output <out>
 
 ``register`` adds a repository to the hub file, creating the file (with this repository
 as its own registry, unless one is named) when absent. It prints
 ``{"changed": true|false}``; push the output only when it changed.
+
+``add-theme`` adds the theme a YAML file describes to the hub file's appearance
+section, and with ``--default`` makes it the site's default. It fails, naming every
+pairing, when the theme's text misses the WCAG AA contrast. It prints
+``{"changed": true|false}``.
 
 ``page-url`` prints the address of a repository's page on the site, of one of its plans,
 or of one item's card on that plan's page. It fails when the hub file names no site.
@@ -27,7 +34,7 @@ import argparse
 import json
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -41,6 +48,10 @@ from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.exceptions import RegistryUnreadableError
+from basstler.plan_site.theme import (
+    AppearanceSettings,
+    SiteTheme,
+)
 from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
@@ -67,6 +78,11 @@ class HubCommand(StrEnum):
     Print the address of a page on the site.
     """
 
+    ADD_THEME = "add-theme"
+    """
+    Add a theme of the owner's to the hub file, or make it the default.
+    """
+
 
 class HubFileKey(StrEnum):
     """
@@ -91,6 +107,11 @@ class HubFileKey(StrEnum):
     REPOSITORIES = "repositories"
     """
     Every repository the site publishes.
+    """
+
+    APPEARANCE = "appearance"
+    """
+    The site's default theme and colour scheme, and its owner's themes.
     """
 
 
@@ -171,6 +192,11 @@ class PlanHub:
     The branch each listed repository keeps its notes on.
     """
 
+    appearance: AppearanceSettings = field(default_factory=AppearanceSettings)
+    """
+    The site's default theme and colour scheme, and the themes its owner adds.
+    """
+
     @classproperty
     def file_header(cls) -> str:
         """
@@ -196,6 +222,9 @@ class PlanHub:
             site_url=data.get(HubFileKey.SITE_URL),
             notes_branch=data.get(HubFileKey.NOTES_BRANCH)
             or PersonalNotesSetting.BRANCH.default,
+            appearance=AppearanceSettings.from_json(
+                data.get(HubFileKey.APPEARANCE) or {}
+            ),
         )
 
     @classmethod
@@ -252,6 +281,7 @@ class PlanHub:
             HubFileKey.REGISTRY.value: self.registry,
             HubFileKey.NOTES_BRANCH.value: self.notes_branch,
             HubFileKey.REPOSITORIES.value: self.repositories,
+            HubFileKey.APPEARANCE.value: self.appearance.to_json(),
         }
         return self.file_header + yaml.safe_dump(data, sort_keys=False)
 
@@ -416,10 +446,17 @@ def main() -> int:
     page_url_parser.add_argument("--repository", required=True)
     page_url_parser.add_argument("--plan", default=None)
     page_url_parser.add_argument("--item", default=None)
+    add_theme_parser = subcommands.add_parser(HubCommand.ADD_THEME)
+    add_theme_parser.add_argument("--hub", required=True, type=Path)
+    add_theme_parser.add_argument("--theme", required=True, type=Path)
+    add_theme_parser.add_argument("--default", action="store_true")
+    add_theme_parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
 
     if arguments.command == HubCommand.PAGE_URL:
         return print_page_url(arguments)
+    if arguments.command == HubCommand.ADD_THEME:
+        return add_theme(arguments)
     return register_repository(arguments)
 
 
@@ -462,6 +499,31 @@ def register_repository(arguments: argparse.Namespace) -> int:
     if arguments.site_url and hub.site_url != arguments.site_url:
         hub.site_url = arguments.site_url
         changed = True
+    arguments.output.write_text(hub.to_text())
+    logger.info(json.dumps({"changed": changed}))
+    return 0
+
+
+def add_theme(arguments: argparse.Namespace) -> int:
+    """
+    Add ``add-theme``'s theme to the hub file and write the result.
+
+    :param arguments: The parsed ``add-theme`` arguments.
+    :return: The exit status: 1 when there is no hub file or the theme is hard to read.
+    """
+    hub = PlanHub.load(arguments.hub)
+    if hub is None:
+        logger.error(f"{arguments.hub} is not a hub file.")
+        return 1
+    theme = SiteTheme.from_json(yaml.safe_load(arguments.theme.read_text()))
+    if theme.unreadable_pairings:
+        logger.error(f"{theme.identifier}: {theme.contrast_report}")
+        return 1
+    appearance = hub.appearance.with_theme(theme)
+    if arguments.default:
+        appearance = replace(appearance, default_theme=theme.identifier)
+    changed = appearance != hub.appearance
+    hub.appearance = appearance
     arguments.output.write_text(hub.to_text())
     logger.info(json.dumps({"changed": changed}))
     return 0

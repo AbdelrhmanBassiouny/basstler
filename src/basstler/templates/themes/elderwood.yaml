@@ -1,0 +1,49 @@
+# Elderwood: forest green and gold on parchment, book-face headings and a fleuron.
+title: Elderwood
+light:
+  background: "#F5EEDC"
+  surface: "#FBF6E9"
+  surface_alternate: "#EDE2C8"
+  text: "#2B2113"
+  text_muted: "#5E4F35"
+  border: "#D9C9A3"
+  accent: "#3B6B3A"
+  accent_strong: "#2A4F29"
+  accent_tint: "#E3EDD5"
+  good: "#2E5F2D"
+  good_tint: "#E2EDD3"
+  warning: "#6E5000"
+  warning_tint: "#F6EBC6"
+  bad: "#8F2526"
+  bad_tint: "#F6DEDA"
+  info: "#2B5583"
+  info_tint: "#E1EAF4"
+  idle: "#5F563F"
+  idle_tint: "#ECE5D3"
+dark:
+  background: "#12140F"
+  surface: "#1A1D16"
+  surface_alternate: "#22261C"
+  text: "#EDE5CF"
+  text_muted: "#B3A886"
+  border: "#3A3C2C"
+  accent: "#8FBF6A"
+  accent_strong: "#B5D98F"
+  accent_tint: "#22311A"
+  good: "#9FCF7E"
+  good_tint: "#1C2E15"
+  warning: "#E3C066"
+  warning_tint: "#352B10"
+  bad: "#EE9483"
+  bad_tint: "#3A1C17"
+  info: "#93B8E0"
+  info_tint: "#18263A"
+  idle: "#B6AD94"
+  idle_tint: "#2A2B21"
+style:
+  heading_font: '"Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif'
+  body_font: 'Georgia, "Times New Roman", serif'
+  corner_radius: 4px
+  small_corner_radius: 3px
+  ornament: "❦"
+  transition_duration: 220ms

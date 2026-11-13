@@ -1,12 +1,15 @@
 {# The markup the site's pages share. #}
 
-{% macro health_banner(skipped_pages) %}
-{% if skipped_pages %}
+{% macro health_banner(skipped_pages, skipped_themes=[]) %}
+{% if skipped_pages or skipped_themes %}
   <section class="health" role="alert">
-    <h2>{{ skipped_pages | length }} left out of this build</h2>
+    <h2>{{ (skipped_pages | length) + (skipped_themes | length) }} left out of this build</h2>
     <ul>
     {% for skipped in skipped_pages %}
       <li><code>{{ skipped.site_path }}</code>: {{ skipped.reason }}</li>
+    {% endfor %}
+    {% for skipped in skipped_themes %}
+      <li>Theme <code>{{ skipped.identifier }}</code>: {{ skipped.reason }}</li>
     {% endfor %}
     </ul>
   </section>

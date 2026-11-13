@@ -19,6 +19,13 @@ from basstler.github.client import PageParameter
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.plan import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
+from basstler.plan_site.site_page import SitePage
+from basstler.plan_site.theme import (
+    AppearanceAttribute,
+    ColorScheme,
+    SiteAppearance,
+    SkippedTheme,
+)
 from basstler.render_common import TemplatePage
 from basstler.repository import GitHubAddress
 
@@ -534,14 +541,26 @@ class SiteSummary(ProgressCard):
     Every repository on the site, in the hub file's order.
     """
 
+    skipped_themes: list[SkippedTheme] = field(default_factory=list)
+    """
+    The themes the build left out.
+    """
+
     @classmethod
-    def over_repositories(cls, repositories: list[RepositorySummary]) -> SiteSummary:
+    def over_repositories(
+        cls,
+        repositories: list[RepositorySummary],
+        skipped_themes: list[SkippedTheme],
+    ) -> SiteSummary:
         """
         :param repositories: Every repository on the site.
+        :param skipped_themes: The themes the build left out.
         :return: The site's summary, counting every repository's items.
         """
         return cls(
-            repositories=repositories, counted_items=cls.items_over(repositories)
+            repositories=repositories,
+            skipped_themes=skipped_themes,
+            counted_items=cls.items_over(repositories),
         )
 
     @property
@@ -579,6 +598,11 @@ class SiteStylesheet(TemplatePage):
     The one stylesheet every page of the site links.
     """
 
+    appearance: SiteAppearance = field(default_factory=SiteAppearance)
+    """
+    The themes whose colours and style the stylesheet declares.
+    """
+
     @classproperty
     def template(cls) -> str:
         return SiteTemplate.STYLESHEET.name
@@ -587,7 +611,11 @@ class SiteStylesheet(TemplatePage):
         """
         :return: The stylesheet's text.
         """
-        return self.render_template()
+        return self.render_template(
+            appearance=self.appearance,
+            attribute=AppearanceAttribute,
+            scheme=ColorScheme,
+        )
 
 
 @dataclass(frozen=True)
@@ -638,8 +666,8 @@ class HubPageVocabulary(LiveStateVocabulary):
     """
 
 
-@dataclass
-class LiveProgressPage(TemplatePage, ABC):
+@dataclass(kw_only=True)
+class LiveProgressPage(SitePage, ABC):
     """
     A site page whose progress cards its script recounts from GitHub's live pull
     request states.
@@ -669,11 +697,6 @@ class HubPage(LiveProgressPage):
     The whole site, whose repositories are listed in the order they should appear.
     """
 
-    stylesheet_url: str
-    """
-    The address of the site's :class:`SiteStylesheet`.
-    """
-
     @classproperty
     def template(cls) -> str:
         return SiteTemplate.HUB.name
@@ -685,7 +708,6 @@ class HubPage(LiveProgressPage):
         return self.render_template(
             site=self.site,
             repositories=self.site.repositories,
-            stylesheet_url=self.stylesheet_url,
         )
 
 
@@ -706,11 +728,6 @@ class RepositoryIndexPage(LiveProgressPage):
     The hub's address, linked back up to.
     """
 
-    stylesheet_url: str
-    """
-    The address of the site's :class:`SiteStylesheet`.
-    """
-
     @classproperty
     def template(cls) -> str:
         return SiteTemplate.REPOSITORY_INDEX.name
@@ -722,5 +739,4 @@ class RepositoryIndexPage(LiveProgressPage):
         return self.render_template(
             repository=self.repository,
             hub_url=self.hub_url,
-            stylesheet_url=self.stylesheet_url,
         )

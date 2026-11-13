@@ -56,6 +56,7 @@ from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSou
 from basstler.plan_site.cards import PlanTimeAttribute
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
+from basstler.plan_site.theme import SiteAppearance
 from basstler.locations import ProjectLocation
 from basstler.plan.model import PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
@@ -239,6 +240,11 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     When the site is built, which every plan page shows as its last refresh.
     """
 
+    appearance: SiteAppearance = field(default_factory=SiteAppearance, kw_only=True)
+    """
+    The themes every page is drawn in.
+    """
+
     @property
     def stylesheet_url(self) -> str:
         """
@@ -337,7 +343,10 @@ class RepositorySite(SiteSection[RepositorySummary]):
             list(skipped.values()),
         )
         index = RepositoryIndexPage(
-            repository, self.address.hub_url, self.stylesheet_url
+            repository,
+            self.address.hub_url,
+            stylesheet_url=self.stylesheet_url,
+            appearance=self.appearance,
         )
         self.write_page(repository_directory, index.render())
         return repository
@@ -377,6 +386,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             )
         renderer = PlanPage(
             stylesheet_url=self.stylesheet_url,
+            appearance=self.appearance,
             plan=plan,
             roadmap_text=source.roadmap_text,
             repository_rules=self.repository_rules,
@@ -430,6 +440,18 @@ class HubSite(SiteSection[SiteSummary]):
     :meth:`Repository.clone_url_under` takes it.
     """
 
+    appearance: SiteAppearance = field(init=False)
+    """
+    The themes the hub file's appearance section makes of the built-in and the owner's
+    themes.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Read the site's themes out of the hub file.
+        """
+        self.appearance = SiteAppearance(self.hub.appearance)
+
     def build(self, output: Path) -> SiteSummary:
         """
         Render every repository, then the hub linking them and the stylesheet every page
@@ -446,9 +468,15 @@ class HubSite(SiteSection[SiteSummary]):
                 )
                 for position, repository in enumerate(self.hub.repositories)
             ]
-        summary = SiteSummary.over_repositories(repositories)
-        self.write_page(output, HubPage(summary, self.stylesheet_url).render())
-        (output / SiteFile.STYLESHEET).write_text(SiteStylesheet().render())
+        summary = SiteSummary.over_repositories(
+            repositories, self.appearance.skipped_themes
+        )
+        hub_page = HubPage(
+            summary, stylesheet_url=self.stylesheet_url, appearance=self.appearance
+        )
+        self.write_page(output, hub_page.render())
+        stylesheet = SiteStylesheet(self.appearance)
+        (output / SiteFile.STYLESHEET).write_text(stylesheet.render())
         (output / SiteFile.NO_JEKYLL).touch()
         SiteDigest(output).write()
         return summary
@@ -474,6 +502,7 @@ class HubSite(SiteSection[SiteSummary]):
             pull_request_source=self.pull_request_source,
             notes=notes,
             built_at=self.built_at,
+            appearance=self.appearance,
         )
         return site.build(output)
 

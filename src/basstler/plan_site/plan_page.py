@@ -20,7 +20,8 @@ from basstler.plan_site.plan_overview import NextSteps, PlanOverview
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary
 from basstler.pull_request_state import LivePullRequests
-from basstler.render_common import TemplatePage, render_markdown_to_html
+from basstler.plan_site.site_page import SitePage
+from basstler.render_common import render_markdown_to_html
 
 # %% the rendered page
 
@@ -46,18 +47,13 @@ class RenderedPlanPage:
 
 
 @dataclass(kw_only=True)
-class PlanPage(TemplatePage):
+class PlanPage(SitePage):
     """
     A plan's page on the site: one column per wave, each item a card with its status,
     pull request, CI, assignee and dependency chips, plus the plan's next steps.
 
     In the browser, the page reads every pull request's state from GitHub, shows it
     live, and shows the items no draft holds back any longer as startable.
-    """
-
-    stylesheet_url: str
-    """
-    The address of the site's stylesheet.
     """
 
     plan: Plan
@@ -123,7 +119,6 @@ class PlanPage(TemplatePage):
         next_steps = NextSteps.of_plan(self.plan, self.dependencies)
         overview = PlanOverview.of_plan(self.plan, next_steps)
         html = self.render_template(
-            stylesheet_url=self.stylesheet_url,
             script_template=SiteTemplate.PLAN_SCRIPT.name,
             live_state_script_template=SiteTemplate.LIVE_STATE_SCRIPT.name,
             recheck_script_template=SiteTemplate.PLAN_PULL_REQUEST_RECHECK_SCRIPT.name,

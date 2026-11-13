@@ -1,0 +1,48 @@
+# Rosé: rose and plum, serif headings and soft corners.
+title: Rosé
+light:
+  background: "#FBF5F6"
+  surface: "#FFFFFF"
+  surface_alternate: "#F4E8EB"
+  text: "#2A1A20"
+  text_muted: "#694F5A"
+  border: "#EAD7DD"
+  accent: "#B03A63"
+  accent_strong: "#8C2449"
+  accent_tint: "#FBE4EC"
+  good: "#2B6E46"
+  good_tint: "#E3F4EA"
+  warning: "#7F4B00"
+  warning_tint: "#FCEFD9"
+  bad: "#A61F33"
+  bad_tint: "#FDE6E9"
+  info: "#5144A8"
+  info_tint: "#ECEAFB"
+  idle: "#665A61"
+  idle_tint: "#F0EAEC"
+dark:
+  background: "#1A1216"
+  surface: "#23181D"
+  surface_alternate: "#2C1F25"
+  text: "#F3E6EA"
+  text_muted: "#BFA4AE"
+  border: "#3F2D34"
+  accent: "#E07A9C"
+  accent_strong: "#F29BB8"
+  accent_tint: "#3D1A27"
+  good: "#7CD39A"
+  good_tint: "#163322"
+  warning: "#EDB867"
+  warning_tint: "#3A2A12"
+  bad: "#F48C98"
+  bad_tint: "#41191F"
+  info: "#AFA6F5"
+  info_tint: "#25213F"
+  idle: "#B9A9B1"
+  idle_tint: "#2E2429"
+style:
+  heading_font: 'Georgia, "Times New Roman", serif'
+  corner_radius: 16px
+  small_corner_radius: 10px
+  ornament: "✿"
+  transition_duration: 180ms
