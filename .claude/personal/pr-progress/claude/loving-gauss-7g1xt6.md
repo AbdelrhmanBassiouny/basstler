@@ -1,10 +1,10 @@
-## Plan
-- Keep #154 (package-map) mergeable with main and its baseline exact until review.
+Plan
+- package-map (#154): declare distributions, check imports against them, guard in CI.
 
-## Done
-- Merged main at 51bd1f03: took main's .pre-commit-config.yaml, kept both exceptions.
-- Placed json_model (core), main_failure and repository_attachment (github), document_references (notes); dropped upstream_reviews.vocabulary; baseline 22 -> 25.
-- Folded windows-support/windows-interpreter-candidates into uv-workspace (deferred there).
+Done
+- Merged main at 51bd1f03; review of 2026-11-13 answered at ebad5657: no crossings
+  list, ModuleImport, PackageMap as a Mapping, CI compares crossings with the base.
 
-## Next
-- Owner reviews module placement and dependency lists; CI on 306142fa.
+Next
+- CI on ebad5657; owner's review of module placement, dependency lists and the
+  krrood comparison thread (left open).
