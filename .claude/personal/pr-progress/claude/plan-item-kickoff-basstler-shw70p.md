@@ -1,12 +1,11 @@
 ## Plan
-- new-crossings follows git renames (test first)
-- Move git modules into basstler.git
-- Move GitHub modules into basstler.github; split board's record half
-- ExternalCallFailed -> core exceptions; CredentialOrigin -> core
-- Update package map, importers, tests; ruff, format, code-rules, pytest
+- Verify full suite on the move commit, push, update PR description
 
 ## Done
-- Bootstrap commit, draft PR #210, item recorded in progress
+- new-crossings follows git renames (--base-commit), wired into tests.yml
+- Modules moved into basstler.git / basstler.github; board record half -> github.pull_request_record
+- ExternalCallFailed -> basstler.exceptions; CredentialOrigin -> basstler.credential_origin
+- Crossings 25 -> 18; CI comparison simulated against main: none new
 
 ## Next
-- Checker test for renamed crossings
+- Follow-up candidate: StagedLines (pre-commit code-rules check) also loses renames
