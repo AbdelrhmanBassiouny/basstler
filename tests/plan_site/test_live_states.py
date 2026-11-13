@@ -14,7 +14,11 @@ from typing import Any
 
 from playwright.sync_api import Page, Route, expect
 
-from basstler.maintenance.board import PullRequestField
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import LiveState, PullRequestState
+from basstler.github.repository import PullRequestReference
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.__main__ import RepositorySite, SiteFile
 from basstler.plan_site.cards import (
@@ -25,8 +29,6 @@ from basstler.plan_site.cards import (
 )
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.plan import Item
-from basstler.pull_request_state import LiveState, PullRequestState
-from basstler.repository import PullRequestReference
 
 from ..constants.site import SitePlan, SiteSampleText
 from ..github.pull_request_api import api_pull_request

@@ -16,22 +16,20 @@ from basstler.maintenance.restack_steps import RestackOutcome
 
 from ..constants.paths import RepositoryLocation
 from ..constants.stack import RemoteName, StackBranch
-
 from .fork import (
     UPSTREAM_BASE,
     FixtureFile,
     ForkCheckout,
-    a_stack,
     a_parent_and_child,
+    a_stack,
     the_board,
 )
 from .recorded_fork import (
-    RecordingPullRequests,
-    PullRequestsWatchingTheCaller,
-    ReportingRefused,
     PullRequestsRefusingToReport,
+    PullRequestsWatchingTheCaller,
+    RecordingPullRequests,
+    ReportingRefused,
 )
-
 
 # %% the checkout the pass was invoked in
 

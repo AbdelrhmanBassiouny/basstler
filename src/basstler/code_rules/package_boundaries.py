@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
+from basstler.git.commands import GitCommandRunner
 from basstler.json_model import ValidatedJSONModel
 from basstler.locations import PackageLocation
-from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.package_map import PACKAGE_MAP, PackageMap
 
 # %% imports

@@ -14,22 +14,21 @@ from pathlib import Path
 import pytest
 
 import basstler.setup.steps
-from basstler.github_labels import GitHubLabel
+from basstler.github.repository import Repository
+from basstler.github.tooling_labels import GitHubLabel
+from basstler.locations import PluginLocation
 from basstler.setup.steps import (
     ForkActions,
     ForkLabels,
-    git_value,
+    Host,
     PersistentVariables,
     PersonalNotesSetting,
-    Host,
     RepositoryAccess,
     SetupChecklist,
     SetupLink,
+    git_value,
     resolve_repository,
 )
-
-from basstler.locations import PluginLocation
-from basstler.repository import Repository
 
 from ..constants.environment import ScrubbedEnvironmentPrefix
 from ..constants.paths import RepositoryLocation

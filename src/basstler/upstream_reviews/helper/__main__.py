@@ -33,9 +33,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.upstream_reviews.helper import fetch
 from basstler.class_property import classproperty
-from basstler.repository import Repository
+from basstler.github.repository import Repository
+from basstler.github.states import CheckOutcome
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.exceptions import (
     UpstreamReadError,
@@ -43,6 +43,7 @@ from basstler.upstream_reviews.exceptions import (
 from basstler.upstream_reviews.failure_logs import (
     FailedJob,
 )
+from basstler.upstream_reviews.helper import fetch
 from basstler.upstream_reviews.helper.recording import (
     HelperChunk,
     HelperRecording,
@@ -56,7 +57,6 @@ from basstler.upstream_reviews.readers import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.github.states import CheckOutcome
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

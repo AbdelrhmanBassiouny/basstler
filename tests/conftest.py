@@ -30,7 +30,6 @@ from .maintenance.fork import ForkCheckout
 from .scratch_repository import ScratchRepository
 from .upstream_reviews.replay import RecordedResponse, ReplayingClient
 
-
 # %% the package's environment, as CI has it
 
 

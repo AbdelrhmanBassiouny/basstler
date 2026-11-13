@@ -8,12 +8,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from http import HTTPStatus
 
-from basstler.github.client import GitHubAttemptClient, GitHubResponse, GitHubWrite
-from basstler.github.client import HttpMethod
+from basstler.github.client import (
+    GitHubAttemptClient,
+    GitHubResponse,
+    GitHubWrite,
+    HttpMethod,
+)
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.repository import Repository
 from basstler.personal_notes.access import NotesRepositoryAccess
-from basstler.repository import Repository
 
 from ..scratch_repository import ScratchRepository
 

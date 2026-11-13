@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 
 
 class GitHubLabel(StrEnum):

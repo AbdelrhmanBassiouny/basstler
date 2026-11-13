@@ -15,8 +15,8 @@ from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.github.repository import Repository
 from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
-from basstler.repository import Repository
 
 
 class DataclassException(Exception, ABC):
@@ -171,6 +171,38 @@ class MissingStatusLineError(DataclassException, ValueError):
 
     def suggest_correction(self) -> str:
         return "give the item a status: line in plan.yaml"
+
+
+# %% calls to git and GitHub
+
+
+@dataclass
+class ExternalCallFailed(DataclassException, RuntimeError):
+    """
+    Base for a call to git or GitHub that the caller depended on and did not get.
+
+    Both carry what was called, the status it came back with and what it said, and
+    differ only in how they name the call.
+    """
+
+    status: int
+    """The status the call came back with."""
+
+    detail: str
+    """
+    What the far side said about it.
+    """
+
+    @property
+    def call(self) -> str:
+        """:return: The call that failed, named the way its own caller named it."""
+        raise NotImplementedError
+
+    def error_message(self) -> str:
+        return f"{self.call} failed with {self.status}: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return ""
 
 
 # %% plan validation

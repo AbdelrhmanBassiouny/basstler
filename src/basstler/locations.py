@@ -89,7 +89,7 @@ class PackageLocation(PathEnumeration):
     The templates the plan site's pages are rendered from.
     """
 
-    QUERIES = DIRECTORY / "upstream_reviews" / "queries"
+    QUERIES = DIRECTORY / "github" / "queries"
     """
     The GraphQL documents the upstream review reader sends.
     """

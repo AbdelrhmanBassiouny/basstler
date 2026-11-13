@@ -20,8 +20,8 @@ from basstler.code_rules.package_boundaries import (
 )
 from basstler.code_rules.rule_module import RuleModule
 from basstler.exit_codes import ExitCode
+from basstler.git.commands import GitCommandRunner
 from basstler.locations import ProjectLocation
-from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

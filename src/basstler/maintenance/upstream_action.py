@@ -16,10 +16,10 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.class_property import classproperty
+from basstler.github.repository import Repository
+from basstler.github.repository_access import PullRequestReader
 from basstler.locations import ClaudeCodeVariable
 from basstler.maintenance.board import UpstreamPullRequests
-from basstler.maintenance.github import PullRequestReader
-from basstler.repository import Repository
 from basstler.upstream_reviews.action.exchange import (
     ActionAnswer,
     ActionRequest,

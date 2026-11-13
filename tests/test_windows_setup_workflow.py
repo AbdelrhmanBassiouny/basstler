@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.workflows import Trigger, TriggerEvent, Workflow
+from basstler.github.workflows import Trigger, TriggerEvent, Workflow
 
 from .constants.paths import RepositoryLocation
 

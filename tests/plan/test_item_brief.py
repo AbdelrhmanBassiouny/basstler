@@ -10,7 +10,9 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.github_labels import GitHubLabel
+from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.github.repository import PullRequestReference, Repository
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.check_dependency_readiness import ReadinessField
 from basstler.plan.item_brief import (
@@ -29,8 +31,6 @@ from basstler.plan.model import (
 )
 from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.size_limits import Roadmap
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
-from basstler.repository import PullRequestReference, Repository
 
 from ..constants.paths import DatasetLocation
 from ..fixture_plans import FixturePlanId, ForeignItemId

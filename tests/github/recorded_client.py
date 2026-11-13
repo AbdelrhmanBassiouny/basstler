@@ -12,8 +12,8 @@ from typing import Any
 from basstler.github.client import (
     GitHubFullClient,
     GitHubResponse,
-    HttpMethod,
     GitHubWrite,
+    HttpMethod,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed

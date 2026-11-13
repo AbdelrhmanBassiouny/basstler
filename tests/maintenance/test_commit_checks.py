@@ -9,12 +9,12 @@ from pathlib import PurePath
 
 import pytest
 
-from basstler.maintenance.github import (
+from basstler.github.repository_access import (
     CommitReport,
     GitHubPath,
     GitHubRepository,
-    ListingParameter,
     GitHubRepositoryPath,
+    ListingParameter,
 )
 from basstler.github.states import CombinedCheckState
 

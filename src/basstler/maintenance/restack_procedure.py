@@ -13,8 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from basstler.maintenance.git_commands import BranchAncestry, GitCommandRunner
-from basstler.maintenance.github import ForkPullRequests
+from basstler.git.commands import BranchAncestry, GitCommandRunner
+from basstler.git.commit_move import CommitMoveChecks
+from basstler.github.repository_access import ForkPullRequests
 from basstler.maintenance.restack_steps import (
     BranchOutcome,
     BranchUnderRestack,
@@ -28,7 +29,6 @@ from basstler.maintenance.restack_steps import (
     SkipBranchAlreadyCurrent,
     WithholdBranchStillConflicting,
 )
-from basstler.stack.commit_move import CommitMoveChecks
 from basstler.stack.model import Stack
 
 if TYPE_CHECKING:

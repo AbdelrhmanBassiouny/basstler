@@ -16,13 +16,12 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath
 
 from basstler.class_property import classproperty
-from basstler.exceptions import UnresolvableReferenceError
-from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.environment import GitVariable
+from basstler.exceptions import ExternalCallFailed, UnresolvableReferenceError
+from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.github.constants import CommitTrailer
+from basstler.github.repository import GitHubAddress
 from basstler.locations import CommitScratchFile, RepositoryStateLocation
-from basstler.maintenance.constants import CommitTrailer
-from basstler.maintenance.exceptions import ExternalCallFailed
-from basstler.repository import GitHubAddress
 from basstler.stack.model import IntegrationStrategy
 from basstler.stack.settings import Configuration
 

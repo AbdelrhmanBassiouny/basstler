@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from basstler.github.repository import Repository
 from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
-from basstler.repository import Repository
 from basstler.stack.configuration import (
     CommittedStackConfiguration,
     MissingUpstreamRepositoryError,

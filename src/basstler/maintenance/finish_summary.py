@@ -16,15 +16,15 @@ from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from basstler.github_labels import GitHubLabel
+from basstler.github.constants import MaintenanceText
+from basstler.github.states import CombinedCheckState
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.maintenance.check_overview import CheckOverview
-from basstler.maintenance.constants import MaintenanceText
 from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.render_common import AllowedUrlScheme
-from basstler.stack.model import StackBranch, BranchStatus, Stack
-from basstler.github.states import CombinedCheckState
+from basstler.stack.model import BranchStatus, Stack, StackBranch
 
 # %% vocabulary
 

@@ -12,6 +12,7 @@ from http import HTTPStatus
 
 import pytest
 
+from basstler.github.repository import Repository
 from basstler.plan_site.build_start import BuildStart
 from basstler.plan_site.exceptions import PlanSiteTokenNotEnteredError
 from basstler.plan_site.site_repository import SiteRepository
@@ -23,7 +24,6 @@ from basstler.plan_site.token_storage import (
     TokenStorage,
 )
 from basstler.plan_site.workflows import PlanSiteSecret
-from basstler.repository import Repository
 
 from .site_answering_client import SiteAnsweringClient
 

@@ -11,19 +11,19 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AliasPath, Field
 
-from basstler.upstream_reviews.exceptions import (
-    GraphQLErrorsReturned,
-)
-from basstler.upstream_reviews.review_models import (
+from basstler.github.graphql import GraphQLConnection
+from basstler.github.review_models import (
     BranchPullRequest,
     Review,
     ReviewThread,
     ReviewThreadPage,
 )
-from basstler.github.graphql import GraphQLConnection
-from basstler.github.states import CheckOutcome, ConclusionOutcome, CombinedCheckState
+from basstler.github.states import CheckOutcome, CombinedCheckState, ConclusionOutcome
 from basstler.github.web_page import AbsentAsEmpty
 from basstler.json_model import ValidatedJSONModel
+from basstler.upstream_reviews.exceptions import (
+    GraphQLErrorsReturned,
+)
 
 # %% models mirroring the pull request
 

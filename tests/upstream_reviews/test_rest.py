@@ -14,8 +14,12 @@ from enum import StrEnum
 
 import pytest
 
+from basstler.github.repository import Repository
+from basstler.github.rest_models import (
+    RestPullRequestSummary,
+)
+from basstler.github.states import CheckOutcome, CombinedCheckState, PullRequestState
 from basstler.locations import ClaudeCodeVariable
-from basstler.repository import Repository
 from basstler.upstream_reviews.exceptions import (
     UpstreamPullRequestNotFound,
 )
@@ -28,10 +32,6 @@ from basstler.upstream_reviews.readers import (
 from basstler.upstream_reviews.report import (
     UpstreamPullRequestReport,
 )
-from basstler.upstream_reviews.rest_models import (
-    RestPullRequestSummary,
-)
-from basstler.github.states import CheckOutcome, PullRequestState, CombinedCheckState
 
 from .replay import (
     RecordedResponse,
@@ -207,8 +207,8 @@ def test_the_verdict_is_the_worst_outcome_reported(
     outcomes: list[CheckOutcome], verdict: CombinedCheckState
 ):
     """
-    REST carries no combined state of its own, so the verdict GitHub computes is computed here,
-    the way GitHub does.
+    REST carries no combined state of its own, so the verdict GitHub computes is
+    computed here, the way GitHub does.
     """
     assert CombinedCheckState.over(outcomes) is verdict
 

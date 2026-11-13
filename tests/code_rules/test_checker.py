@@ -13,7 +13,7 @@ import pytest
 
 from basstler.code_rules.checker import CodeRulesCheck, StagedLines
 from basstler.code_rules.prose_length import ProseLengthChecker
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.git.commands import GitCommandRunner
 
 from ..constants.paths import ProseSnippet
 

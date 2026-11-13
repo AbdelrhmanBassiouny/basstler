@@ -266,6 +266,7 @@ PACKAGE_MAP = PackageMap(
                 "bash",
                 "class_property",
                 "command_line",
+                "credential_origin",
                 "email_address",
                 "environment",
                 "exceptions",
@@ -283,12 +284,7 @@ PACKAGE_MAP = PackageMap(
         DistributionDeclaration(
             Distribution.GIT,
             Layer.LOCAL_TOOLS,
-            (
-                "branch",
-                "maintenance.git_commands",
-                "maintenance.remote_branch",
-                "stack.commit_move",
-            ),
+            ("git",),
             (Distribution.CORE,),
         ),
         DistributionDeclaration(
@@ -300,25 +296,7 @@ PACKAGE_MAP = PackageMap(
         DistributionDeclaration(
             Distribution.GITHUB,
             Layer.GITHUB,
-            (
-                "actions_budget",
-                "actions_usage",
-                "github",
-                "github_labels",
-                "main_failure",
-                "maintenance.constants",
-                "maintenance.description",
-                "maintenance.github",
-                "pull_request_source",
-                "pull_request_state",
-                "release_version",
-                "repository",
-                "repository_attachment",
-                "upstream_reviews.pull_request_models",
-                "upstream_reviews.rest_models",
-                "upstream_reviews.review_models",
-                "workflows",
-            ),
+            ("github",),
             (Distribution.CORE, Distribution.GIT),
         ),
         DistributionDeclaration(

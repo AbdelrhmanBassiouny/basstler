@@ -11,13 +11,13 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import CommandFailure
+from basstler.git.commands import GitCommandRunner
+from basstler.github.repository import MalformedRepositoryError
 from basstler.maintenance.fast_forward import (
     FastForwardOutcome,
     ForkBaseFastForward,
     RefusedPushHandling,
 )
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.repository import MalformedRepositoryError
 from basstler.stack.settings import Configuration
 
 FOLLOW_UP_ROW_INDENT = "    "

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, PersonalNotesSetupExitCode
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 
 if TYPE_CHECKING:
     from basstler.setup.report import SetupCheck

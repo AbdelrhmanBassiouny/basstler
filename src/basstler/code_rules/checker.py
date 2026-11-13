@@ -10,7 +10,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.git.commands import GitCommandRunner
 
 # %% violations
 

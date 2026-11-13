@@ -11,23 +11,16 @@ from typing import Any
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
-from basstler.locations import ClaudeCodeVariable
-from basstler.repository import Repository
 from basstler.github.client import GitHubReader, GitHubRestClient
-from basstler.upstream_reviews.clients import (
-    GitHubCommandLineClient,
-    GraphQLClient,
-)
-from basstler.upstream_reviews.exceptions import (
-    UpstreamPullRequestNotFound,
-)
-from basstler.upstream_reviews.pull_request_models import (
+from basstler.github.pull_request_models import (
     CheckStatus,
     PullRequestForBranchResult,
     ReviewThreadsPageResult,
     UpstreamPullRequestSnapshot,
 )
-from basstler.upstream_reviews.rest_models import (
+from basstler.github.query_documents import GraphQLDocument, QueryVariable
+from basstler.github.repository import Repository
+from basstler.github.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
     RestPullRequestSummary,
@@ -35,13 +28,20 @@ from basstler.upstream_reviews.rest_models import (
     RestReviewComment,
     RestReviewThread,
 )
-from basstler.upstream_reviews.review_models import (
+from basstler.github.review_models import (
     BranchPullRequest,
     Review,
     ReviewThread,
 )
 from basstler.github.states import PullRequestState
-from basstler.upstream_reviews.query_documents import GraphQLDocument, QueryVariable
+from basstler.locations import ClaudeCodeVariable
+from basstler.upstream_reviews.clients import (
+    GitHubCommandLineClient,
+    GraphQLClient,
+)
+from basstler.upstream_reviews.exceptions import (
+    UpstreamPullRequestNotFound,
+)
 
 # %% reading
 

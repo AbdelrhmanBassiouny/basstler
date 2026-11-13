@@ -17,11 +17,15 @@ import pytest
 from playwright.sync_api import Page, Request, Route, expect
 
 from basstler.github.client import PageParameter
-from basstler.maintenance.board import PullRequestField
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import LiveState, PullRequestState
+from basstler.github.repository import PullRequestReference, Repository
+from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.__main__ import HubSite, SiteFile
 from basstler.plan_site.hub import PlanHub, SiteAddress
-from basstler.locations import SiteTemplate
 from basstler.plan_site.hub_page import (
     MAXIMUM_PULL_REQUESTS_PER_PAGE,
     HubPageVocabulary,
@@ -32,9 +36,7 @@ from basstler.plan_site.hub_page import (
 )
 from basstler.plan_site.live_state_display import LiveStateDisplay
 from basstler.plan_site.plan import ProgressStage
-from basstler.pull_request_state import LiveState, PullRequestState
 from basstler.render_common import TemplatePage
-from basstler.repository import PullRequestReference, Repository
 
 from ..constants.site import SitePlan, SiteSampleText
 from ..github.pull_request_api import api_pull_request

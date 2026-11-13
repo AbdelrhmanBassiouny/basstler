@@ -5,15 +5,15 @@ how the page renders it.
 
 from __future__ import annotations
 
+from basstler.github.pull_request_state import (
+    LivePullRequests,
+    PullRequestRecord,
+    PullRequestState,
+)
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ModelOption
 from basstler.plan_site.plan import Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
-from basstler.pull_request_state import (
-    PullRequestRecord,
-    PullRequestState,
-)
-from basstler.pull_request_state import LivePullRequests
 
 from ..fixture_plans import (
     PLAN_UNDER_TEST_ID,

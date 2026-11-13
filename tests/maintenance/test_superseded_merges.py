@@ -5,32 +5,30 @@ waits through.
 
 from __future__ import annotations
 
-from basstler.stack.model import (
-    IntegrationStrategy,
-    PullRequest,
-)
-
-from basstler.maintenance.git_commands import ProposedPush
+from basstler.git.commands import ProposedPush
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.restack_steps import (
     BranchOutcome,
     RestackOutcome,
 )
+from basstler.stack.model import (
+    IntegrationStrategy,
+    PullRequest,
+)
 
 from ..constants.stack import RemoteName, StackBranch
 from .fork import (
     UPSTREAM_BASE,
+    ForkCheckout,
     StackPullRequestNumber,
+    a_board_entry,
+    a_parent_and_child,
+    a_stack,
     make_configuration,
     make_own_remote_configuration,
-    ForkCheckout,
-    a_board_entry,
-    a_stack,
-    a_parent_and_child,
     the_board,
 )
 from .recorded_fork import RecordingPullRequests
-
 
 # %% one merge per branch, however many passes it waits through
 

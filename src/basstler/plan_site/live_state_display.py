@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from basstler.github.pull_request_state import LiveState
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.plan import Item, ProgressStage
-from basstler.pull_request_state import LiveState
 
 # %% what a chip shows
 

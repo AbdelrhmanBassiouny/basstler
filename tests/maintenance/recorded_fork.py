@@ -11,31 +11,30 @@ from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
 from enum import StrEnum
 
+from basstler.environment import GitHubCredentialVariable
+from basstler.git.commands import GitCommandRunner
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.repository_access import ForkPullRequests
+from basstler.locations import ClaudeCodeVariable, RepositoryStateLocation
+from basstler.maintenance.commands import (
+    MaintenanceCommand,
+    MaintenancePass,
+)
 from basstler.stack.model import (
     PullRequest,
     Stack,
 )
 
-from basstler.locations import ClaudeCodeVariable, RepositoryStateLocation
-from basstler.maintenance.board import PullRequestField
-from basstler.maintenance.commands import (
-    MaintenanceCommand,
-    MaintenancePass,
-)
-from basstler.environment import GitHubCredentialVariable
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.github import ForkPullRequests
-
 from ..script_runner import PythonModuleRunner
-
 from .fork import (
-    PromotionSampleText,
     MAINTENANCE_MODULE,
-    make_configuration,
     ForkCheckout,
+    PromotionSampleText,
     a_stack,
+    make_configuration,
 )
-
 
 # %% reporting a branch back to its owner
 

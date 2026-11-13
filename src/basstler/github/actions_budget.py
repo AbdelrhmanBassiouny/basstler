@@ -36,9 +36,9 @@ from basstler.exceptions import (
     TooManyJobsOnEveryPush,
     UncountableJobs,
 )
+from basstler.github.workflows import ActivityType, Job, TriggerEvent, Workflow
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.render_common import create_template_environment
-from basstler.workflows import ActivityType, Job, TriggerEvent, Workflow
 
 # %% vocabulary
 

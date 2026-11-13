@@ -15,9 +15,9 @@ from basstler.github.exceptions import (
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
+from basstler.github.repository import GitHubAddress
+from basstler.github.repository_attachment import SessionProxyAnswer
 from basstler.plan_site.build_start import SiteAccess
-from basstler.repository import GitHubAddress
-from basstler.repository_attachment import SessionProxyAnswer
 
 # %% the fixes
 

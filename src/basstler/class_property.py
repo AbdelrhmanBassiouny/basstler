@@ -6,8 +6,8 @@ Copied from krrood :cite:`krrood` until krrood's light core is released.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 
 class classproperty:
