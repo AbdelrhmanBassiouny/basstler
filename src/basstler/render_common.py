@@ -120,9 +120,11 @@ class ScriptData:
     """
 
     @classproperty
+    @cache
     def field_name(cls) -> type[StrEnum]:
         """
-        The class's field names, each a member named as its field in upper case.
+        The class's field names, each a member named as its field in upper case, built
+        once per class.
         """
         return StrEnum(
             f"{cls.__name__}FieldName",

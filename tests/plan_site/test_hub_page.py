@@ -137,3 +137,7 @@ def test_a_script_reads_each_field_of_a_counted_item_by_its_name():
     assert [member.value for member in CountedItem.field_name] == [
         data_field.name for data_field in dataclasses.fields(CountedItem)
     ]
+
+
+def test_a_class_builds_its_field_names_once():
+    assert CountedItem.field_name is CountedItem.field_name
