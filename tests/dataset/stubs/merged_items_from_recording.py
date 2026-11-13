@@ -15,9 +15,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from basstler.pull_request_source import PullRequestSource
-from basstler.pull_request_state import PullRequestRecord
-from basstler.repository import PullRequestReference, Repository
+from basstler.github.pull_request_source import PullRequestSource
+from basstler.github.pull_request_state import PullRequestRecord
+from basstler.github.repository import PullRequestReference, Repository
 
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
