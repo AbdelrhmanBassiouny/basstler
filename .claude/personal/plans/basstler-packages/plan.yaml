@@ -1,20 +1,24 @@
 schema_version: 1
 id: basstler-packages
-title: 'basstler packages: basstler-* distributions with one lockstep version and a playbook model'
-description: Split basstler into acyclic basstler-* PyPI distributions under the basstler.<part> namespace, released
-  together at one version with exact sibling pins. Then a dataclass playbook model, with settings, a write guard,
-  report sections and an item lifecycle set up through a guided init, lets anyone depend on basstler and compose
-  their own workflow on top of a default one, and code_rules catches up with krrood's development tools. The reorganization
+title: 'basstler packages: basstler-* distributions with one lockstep version and a playbook
+  model'
+description: Split basstler into acyclic basstler-* PyPI distributions under the basstler.<part>
+  namespace, released together at one version with exact sibling pins. Then a dataclass playbook
+  model, with settings, a write guard, report sections and an item lifecycle set up through
+  a guided init, lets anyone depend on basstler and compose their own workflow on top of a
+  default one, and code_rules catches up with krrood's development tools. The reorganization
   goes first.
 default_repository: KAOS-repositories/basstler
 tracking_issue: 151
 waves:
 - id: reorganization
   name: Reorganization
-  description: Acyclic distributions, a uv workspace and lockstep PyPI releases; every in-flight item rebases onto it.
+  description: Acyclic distributions, a uv workspace and lockstep PyPI releases; every in-flight
+    item rebases onto it.
 - id: extensibility
   name: Extensibility
-  description: The playbook model, krrood's latest development tools and the customization guide.
+  description: The playbook model, krrood's latest development tools and the customization
+    guide.
 tracks:
 - id: package-split
   name: Package split and release
@@ -26,94 +30,86 @@ tracks:
   name: Code rules from krrood
   wave: extensibility
 items:
-- id: package-map
-  title: Declare the distributions and their layers, and check imports against them
-  track: package-split
-  branch: claude/loving-gauss-7g1xt6
-  pull_request_number: 154
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_018wfiv7Bw3TgQiQbiuneZDr
-  notes: >
-    Draft #154: basstler.package_map (Layer, Distribution, PACKAGE_MAP as a Mapping) and
-    PackageBoundaryChecker on "a package imports only the basstler packages its pyproject lists".
-    No crossings list (as krrood #546): pre-commit checks staged lines; CI's ruff job runs
-    code-rules crossings at the base commit and new-crossings on the change, failing on any
-    crossing the base lacks. 25 crossings left. Review of 2026-11-13 answered at ebad5657;
-    open: module placement, dependency lists, and the krrood comparison thread.
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
-  depends_on:
-  - package-map
+  depends_on: []
   status: not started
-  notes: 'GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git. Into
-    basstler.github: repository, github_labels, pull_request_state, pull_request_source, maintenance github/board
-    record/description/constants, ExternalCallFailed, upstream_reviews REST/GraphQL models and
-    queries, actions usage/budget, workflows, release_version. Removes github->maintenance and environment->github.
-    Pure moves. upstream_reviews/vocabulary.py was
-    already split by #164 (merged): basstler.json_model, github.graphql, github.web_page, github.states, upstream_reviews.query_documents.'
+  notes: 'GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git.
+    Into basstler.github: repository, github_labels, pull_request_state, pull_request_source,
+    maintenance github/board record/description/constants, ExternalCallFailed, upstream_reviews
+    REST/GraphQL models and queries, actions usage/budget, workflows, release_version. Removes
+    github->maintenance and environment->github. Pure moves. upstream_reviews/vocabulary.py
+    was already split by #164 (merged): basstler.json_model, github.graphql, github.web_page,
+    github.states, upstream_reviews.query_documents.'
 - id: break-remaining-cycles
-  title: Break the remaining cycles and give each distribution its own locations, environment and exceptions
+  title: Break the remaining cycles and give each distribution its own locations, environment
+    and exceptions
   track: package-split
   depends_on:
   - git-and-github-domain
   status: not started
-  notes: >
-    Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part of stack.configuration
-    upstream_reviews reads into github; maintenance->upstream_reviews.action inverted so only stack depends
-    on reviews; plugin_root into core (#76 touches it). Split locations, environment and exceptions per
-    distribution, the rule becoming "once, in its own package's locations". Ends with
-    `code-rules crossings` empty; CI's new-crossings then keeps it so.
+  notes: 'Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part
+    of stack.configuration upstream_reviews reads into github; maintenance->upstream_reviews.action
+    inverted so only stack depends on reviews; plugin_root into core (#76 touches it). Split
+    locations, environment and exceptions per distribution, the rule becoming "once, in its
+    own package''s locations". Ends with `code-rules crossings` empty; CI''s new-crossings
+    then keeps it so.
+
+    '
 - id: uv-workspace
   title: Move each distribution into packages/<name> as a uv workspace with lockstep versions
   track: package-split
   depends_on:
   - break-remaining-cycles
   status: not started
-  notes: >
-    Pure renames. hatch-vcs per package, root ../..; a hatch metadata hook in
-    each sdist pins siblings ==version. Committed uv.lock, uv sync --frozen at session start
-    (absorbs locked-install); package_layout reads importlib.metadata. CI tests each package alone,
-    all on any change. Each package's folder and pyproject
-    become the map's source: modules and dependencies are read, not declared in PACKAGE_MAP.
-    Windows without uv: py -3.14/-3.13/-3.12, then python
-    on PATH, as full paths (absorbs windows-interpreter-candidates). release:major.
+  notes: 'Pure renames. hatch-vcs per package, root ../..; a hatch metadata hook in each sdist
+    pins siblings ==version. Committed uv.lock, uv sync --frozen at session start (absorbs
+    locked-install); package_layout reads importlib.metadata. CI tests each package alone,
+    all on any change. Each package''s folder and pyproject become the map''s source: modules
+    and dependencies are read, not declared in PACKAGE_MAP. Windows without uv: py -3.14/-3.13/-3.12,
+    then python on PATH, as full paths (absorbs windows-interpreter-candidates). release:major.
+
+    '
 - id: pypi-release
   title: Publish every distribution to PyPI on each release with trusted publishing
   track: package-split
   depends_on:
   - uv-workspace
   status: not started
-  notes: After release.yml tags, uv build --all-packages and pypa/gh-action-pypi-publish via OIDC (no token); every
-    package every release, TestPyPI first. The owner registers a pending trusted publisher per name on PyPI and
-    TestPyPI. Session start installs basstler==<plugin release> from PyPI, editable from the workspace in a clone;
-    pip install keeps working without uv (windows-support). release:minor. When PyPI is unreachable, session start
-    installs from a pinned git source instead, and switches to a new runtime only once its hooks and commands load.
+  notes: After release.yml tags, uv build --all-packages and pypa/gh-action-pypi-publish via
+    OIDC (no token); every package every release, TestPyPI first. The owner registers a pending
+    trusted publisher per name on PyPI and TestPyPI. Session start installs basstler==<plugin
+    release> from PyPI, editable from the workspace in a clone; pip install keeps working
+    without uv (windows-support). release:minor. When PyPI is unreachable, session start installs
+    from a pinned git source instead, and switches to a new runtime only once its hooks and
+    commands load.
 - id: playbook-model
-  title: A Playbook dataclass model that every distribution contributes commands, skills, hooks and rules
-    to
+  title: A Playbook dataclass model that every distribution contributes commands, skills,
+    hooks and rules to
   track: playbook
   depends_on:
   - uv-workspace
   status: not started
-  notes: 'basstler.playbook in core: component kinds CommandGroup, SkillDefinition, HookDefinition, McpTool,
-    ActionsWorkflow, Ruleset[RuleKind], SitePanel (hub tab or sidebar), ItemAttribute (typed item fields
-    basstler-plan validates without depending on their owner), and the existing SetupStep, whose SetupChecklist
-    moves to core so each distribution contributes its own steps. PackageContribution via basstler.contributions
-    entry points; Playbook.without/with_components; DefaultPlaybook; a root basstler_playbook. skills
-    build --check. release:minor.'
+  notes: 'basstler.playbook in core: component kinds CommandGroup, SkillDefinition, HookDefinition,
+    McpTool, ActionsWorkflow, Ruleset[RuleKind], SitePanel (hub tab or sidebar), ItemAttribute
+    (typed item fields basstler-plan validates without depending on their owner), and the
+    existing SetupStep, whose SetupChecklist moves to core so each distribution contributes
+    its own steps. PackageContribution via basstler.contributions entry points; Playbook.without/with_components;
+    DefaultPlaybook; a root basstler_playbook. skills build --check. release:minor.'
 - id: krrood-sync
   title: basstler-rules is the rule engine krrood's development tools build on
   track: rules
   depends_on:
   - uv-workspace
   status: not started
-  notes: 'Parity with krrood@be69c37d: one module per top-level section, project rules in a root agent_rules package, checker
-    as a rule''s third element with Section.checkers and check --all-lines, ImportsRules, SerializationRules, ExceptionModellingRules,
-    leading-preposition and name-completion checkers, a format subcommand, .pre-commit-hooks.yaml, RepositoryInstructionsFile.
-    Plus what krrood-development-tools needs to mount it: rulesets a dependent package contributes, and check/format/agents-md
-    commands another CLI mounts. Its API is semver-stable from here. Cite krrood; NOTICE. release:minor.'
+  notes: 'Parity with krrood@be69c37d: one module per top-level section, project rules in
+    a root agent_rules package, checker as a rule''s third element with Section.checkers and
+    check --all-lines, ImportsRules, SerializationRules, ExceptionModellingRules, leading-preposition
+    and name-completion checkers, a format subcommand, .pre-commit-hooks.yaml, RepositoryInstructionsFile.
+    Plus what krrood-development-tools needs to mount it: rulesets a dependent package contributes,
+    and check/format/agents-md commands another CLI mounts. Its API is semver-stable from
+    here. Cite krrood; NOTICE. release:minor.'
 - id: customization-docs
   title: A README per distribution and a guide to writing your own playbook and ruleset
   track: playbook
@@ -124,34 +120,34 @@ items:
   - playbook-setup-wizard
   - item-lifecycle
   status: not started
-  notes: 'A README per distribution: what it holds, depends on, and how to install it alone. The guide''s worked
-    example is the owner''s own playbook adding basstler-recommender (work-recommender) to DefaultPlaybook, with
-    its SitePanel and ItemAttribute components, then dropping a contribution and adding a ruleset of code or plan
-    rules. The guide and NOTICE credit the use case LucaKro/basstler_domain_model and LucaKro/GitHubWorkflow, which
-    had to copy parts of basstler to add features of its own and inspired making basstler customizable without copying.'
+  notes: 'A README per distribution: what it holds, depends on, and how to install it alone.
+    The guide''s worked example is the owner''s own playbook adding basstler-recommender (work-recommender)
+    to DefaultPlaybook, with its SitePanel and ItemAttribute components, then dropping a contribution
+    and adding a ruleset of code or plan rules. The guide and NOTICE credit the use case LucaKro/basstler_domain_model
+    and LucaKro/GitHubWorkflow, which had to copy parts of basstler to add features of its
+    own and inspired making basstler customizable without copying.'
 - id: extension-points
   title: Open vocabularies, one interface per GitHub capability, and shipped test doubles
   track: playbook
   depends_on:
   - uv-workspace
   status: not started
-  notes: Labels (with description and colour), discussion categories and item stages become base classes a user's
-    own enum extends. basstler.github gets one small abstract interface per capability (read pull requests, write
-    labels, comment, read stacks, read workflows) that GitHubRestClient implements. basstler.github.testing ships
-    a recording and replaying client plus fixtures. A general Actions relay for API calls a cloud proxy refuses,
-    generalizing the upstream-reviews route. release:minor.
-
+  notes: Labels (with description and colour), discussion categories and item stages become
+    base classes a user's own enum extends. basstler.github gets one small abstract interface
+    per capability (read pull requests, write labels, comment, read stacks, read workflows)
+    that GitHubRestClient implements. basstler.github.testing ships a recording and replaying
+    client plus fixtures. A general Actions relay for API calls a cloud proxy refuses, generalizing
+    the upstream-reviews route. release:minor.
 - id: playbook-settings
   title: A typed settings model for every value a workflow may differ in
   track: playbook
   depends_on:
   - playbook-model
   status: not started
-  notes: Owners whose repositories may be written to, notes branch and its place (per repository or central), merge
-    or rebase, force-push allowed or never, GitHub-native stacks or basstler restacking, commit attribution policy,
-    protected branches, command name. Defaults equal today's behaviour; no owner, branch name or label is hardcoded
-    outside it. release:minor.
-
+  notes: Owners whose repositories may be written to, notes branch and its place (per repository
+    or central), merge or rebase, force-push allowed or never, GitHub-native stacks or basstler
+    restacking, commit attribution policy, protected branches, command name. Defaults equal
+    today's behaviour; no owner, branch name or label is hardcoded outside it. release:minor.
 - id: write-guard
   title: 'basstler-guard: hooks generated from the playbook that enforce its write rules'
   track: playbook
@@ -159,30 +155,31 @@ items:
   - playbook-settings
   - extension-points
   status: deferred
-  notes: 'Folded into rule-enforcement/playbook-guard (2026-11-09, owner''s decision). Was: new opt-in distribution basstler-guard (git, github), in DefaultPlaybook. Every CommandGroup command declares
-    who may run it: the session alone, the session when told, or only the person. Generates a PreToolUse guard denying
-    direct git and GitHub writes (falling back to the standard library when the runtime is broken), a pre-push hook,
-    and auto-approval of the commands a session may run alone. release:minor.'
-
+  notes: 'Folded into rule-enforcement/playbook-guard (2026-11-09, owner''s decision). Was:
+    new opt-in distribution basstler-guard (git, github), in DefaultPlaybook. Every CommandGroup
+    command declares who may run it: the session alone, the session when told, or only the
+    person. Generates a PreToolUse guard denying direct git and GitHub writes (falling back
+    to the standard library when the runtime is broken), a pre-push hook, and auto-approval
+    of the commands a session may run alone. release:minor.'
 - id: session-report-sections
   title: Session start as a list of report sections a playbook composes
   track: playbook
   depends_on:
   - playbook-model
   status: not started
-  notes: 'SessionReportSection component kind: each section reports that something holds (CI red, conflict, threads
-    waiting, stale base), never the detail, and fails alone and visibly. Today''s session-start messages become
-    the default sections. release:minor.'
-
+  notes: 'SessionReportSection component kind: each section reports that something holds (CI
+    red, conflict, threads waiting, stale base), never the detail, and fails alone and visibly.
+    Today''s session-start messages become the default sections. release:minor.'
 - id: item-lifecycle
   title: Work-item stages, transitions and who may make them
   track: playbook
   depends_on:
   - playbook-model
   status: not started
-  notes: 'An ItemLifecycle model: stages, allowed transitions and whether a session or only the person
-    makes each, with labels from extension-points. Default lifecycle equals today''s item statuses. Item
-    priority and a proof (a failing test the code runs itself) as ItemAttribute components. release:minor.'
+  notes: 'An ItemLifecycle model: stages, allowed transitions and whether a session or only
+    the person makes each, with labels from extension-points. Default lifecycle equals today''s
+    item statuses. Item priority and a proof (a failing test the code runs itself) as ItemAttribute
+    components. release:minor.'
 - id: playbook-setup-wizard
   title: 'basstler init: guided setup with recommended choices that writes the user''s playbook'
   track: playbook
@@ -191,21 +188,22 @@ items:
   - rule-enforcement/playbook-guard
   - session-report-sections
   status: not started
-  notes: 'A few questions, the recommended choice first, each answer becoming a playbook setting; writes the repository''s
-    basstler_playbook and verifies every step. Never changes repository settings: detects issues, Discussions, Actions
-    or branch auto-delete being off and gives the link to turn them on. Builds on basstler-setup-ux''s checklist.
-    release:minor.'
-
+  notes: 'A few questions, the recommended choice first, each answer becoming a playbook setting;
+    writes the repository''s basstler_playbook and verifies every step. Never changes repository
+    settings: detects issues, Discussions, Actions or branch auto-delete being off and gives
+    the link to turn them on. Builds on basstler-setup-ux''s checklist. release:minor.'
 - id: third-party-imports
   title: A distribution imports only the third-party libraries its own pyproject requires
   track: package-split
   depends_on:
   - uv-workspace
   status: not started
-  notes: >
-    Extends PackageBoundaryChecker from basstler imports to third-party ones, as krrood's
+  notes: 'Extends PackageBoundaryChecker from basstler imports to third-party ones, as krrood''s
     CoreBoundary does (#546): map each imported top-level package to its distributions with
-    importlib.metadata.packages_distributions(), and allow the distribution's own requirements
-    plus the closure of what they require, without extras. Needs each distribution's own
+    importlib.metadata.packages_distributions(), and allow the distribution''s own requirements
+    plus the closure of what they require, without extras. Needs each distribution''s own
     pyproject.toml, so it follows uv-workspace. A crossing is reported by the same code-rules
     check and CI comparison with the base. release:minor.
+
+    '
+landed_item_count: 1
