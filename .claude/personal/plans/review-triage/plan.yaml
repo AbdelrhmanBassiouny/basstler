@@ -20,7 +20,8 @@ items:
   status: in progress
   branch: ccr-37402cb7-cls5ht
   session: https://claude.ai/code/session_01JxHGiQ6QwrU1DCxnD3WaYc
-  notes: 'One PR: a deterministic classifier (AST and token comparison after undoing renames,
-    strict imports, whitespace-normalised docstrings and comments), renames auto-detected
-    with a PR-description override, a CI job summary, and a command marking mechanical files
-    viewed with the reviewer''s own credential.'
+  pull_request_number: 213
+  notes: 'Draft #213: basstler-review-triage distribution with FileJudgment, ChangeKind,
+    RenameSource and TriageOutput extension points, a CI summary in the lint job, and
+    mark-viewed for a local machine (cloud sessions refuse GraphQL). Next: a rename source
+    for module moves, which #210 needs.'
