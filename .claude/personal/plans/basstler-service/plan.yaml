@@ -113,20 +113,22 @@ items:
   depends_on:
   - github-sign-in
   notes: >-
-    An HTTP API applies one plan edit per request as the signed-in user, after the same
-    validation and size limits save-plan.sh runs, and commits it to the notes branch in
-    order, so concurrent edits never race. A user may edit only plans whose notes repository
-    they can push to. save-plan.sh calls it when an instance is configured and keeps its own
+    An HTTP API applies one plan edit, or one edit of a rules or notes file (account, repository,
+    plan or item), per request as the signed-in user, after the same validation and size limits
+    save-plan.sh runs, and commits it to the notes branch in order, so concurrent edits never race.
+    A user may edit only notes repositories they can push to. save-plan.sh calls it when an instance is configured and keeps its own
     push otherwise. A session reaches it through basstler-v3's MCP tools where they exist.
 - id: site-actions
-  title: Site buttons defer, restore, delete and start items as the signed-in viewer
+  title: Site buttons defer, restore, delete and start items and commit rule and note edits as the
+    signed-in viewer
   track: writes
   status: not started
   depends_on:
   - plan-write-api
   notes: >-
     Each button sends one plan-write-api request; the page shows the result through
-    live-pages, and a refused edit is shown with its reason. Request bodies are parsed into
+    live-pages, and a refused edit is shown with its reason. Commit on plan-site-ui's
+    rules-and-notes-comments becomes one click here, in place of opening GitHub's editor. Request bodies are parsed into
     models at the boundary. Replaces plan-site-ui's command-issues and command-token-setup;
     plan-site-ui's item-commands and plan-commands build on this.
 - id: retire-pages-publication
