@@ -199,8 +199,8 @@ class PullRequestReader:
             self.github.get(repository.pull_request_path(number))
         )
         if None in (
-            self.git.commit_or_none(pull_request.base.commit),
-            self.git.commit_or_none(pull_request.head.commit),
+            self.git.commit_or_none(f"{pull_request.base.commit}^{{commit}}"),
+            self.git.commit_or_none(f"{pull_request.head.commit}^{{commit}}"),
         ):
             self.git.fetch(
                 repository.clone_url,

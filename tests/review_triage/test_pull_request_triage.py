@@ -5,12 +5,13 @@ triage.
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import pytest
 
 from basstler.locations import ReviewTriageLocation
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.review_triage.comparison import MechanicalChange
 from basstler.review_triage.detection import RenameDetection
 from basstler.review_triage.exceptions import GraphQLMutationRefused
@@ -20,12 +21,21 @@ from basstler.review_triage.outputs import (
     ViewedFile,
     ViewedMarking,
 )
-from basstler.review_triage.pull_request import PullRequestChanges
+from basstler.review_triage.pull_request import (
+    PullRequestChanges,
+    PullRequestReader,
+    TriagedPullRequest,
+)
 from basstler.review_triage.renames import Rename, RenameDecisions
 from basstler.review_triage.triage import PullRequestTriage, PullRequestTriager
 
 from ..scratch_repository import ScratchRepository
-from .conftest import RecordingWriter, read_sample
+from .conftest import (
+    SAMPLE_REPOSITORY,
+    OnePullRequestReader,
+    RecordingWriter,
+    read_sample,
+)
 from .samples import DescriptionSample, PullRequestSample
 
 # %% renames
@@ -142,3 +152,39 @@ def test_a_refused_marking_is_raised(sample_changes: PullRequestChanges):
     writer = RecordingWriter({"errors": [{"message": "Resource not accessible"}]})
     with pytest.raises(GraphQLMutationRefused):
         ViewedMarking(writer).publish(triage)
+
+
+# %% reading in a checkout lacking the pull request
+
+
+def test_a_checkout_lacking_the_commits_fetches_them(
+    scratch_repository: ScratchRepository,
+    sample_payload: dict[str, Any],
+    sample_changes: PullRequestChanges,
+    tmp_path: Path,
+):
+    """
+    A checkout that has never seen the pull request's commits fetches them from the
+    repository, then reads the same changes.
+    """
+    scratch_repository.serve_origin_as(SAMPLE_REPOSITORY)
+    pull_request = TriagedPullRequest.from_json(sample_payload)
+    scratch_repository.run_git(
+        "push",
+        "--quiet",
+        "origin",
+        f"{pull_request.base.commit}:refs/heads/{pull_request.base.branch}",
+        f"{pull_request.head.commit}:{pull_request.head_reference}",
+    )
+    reviewer = GitCommandRunner(tmp_path / "reviewer")
+    reviewer.working_directory.mkdir()
+    reviewer.run("init", "--quiet")
+    reviewer.run(
+        "config",
+        f"url.{scratch_repository.work_remote_path}.insteadOf",
+        SAMPLE_REPOSITORY.clone_url,
+    )
+    changes = PullRequestReader(reviewer, OnePullRequestReader(sample_payload)).read(
+        SAMPLE_REPOSITORY, pull_request.number
+    )
+    assert changes.files == sample_changes.files
