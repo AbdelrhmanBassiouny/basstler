@@ -61,6 +61,18 @@ class OperatingSystemVariable(EnvironmentVariable):
     """
 
 
+class GitBashVariable(EnvironmentVariable):
+    """
+    The variables Git for Windows' bash (MSYS2) reads before it starts a program.
+    """
+
+    ARGUMENT_CONVERSION_EXCLUSIONS = "MSYS2_ARG_CONV_EXCL"
+    """
+    The ``;``-separated prefixes of the arguments it passes on as written rather than
+    rewriting them as Windows paths.
+    """
+
+
 class GitVariable(EnvironmentVariable):
     """
     The variables git reads that this package, or its tests, set for the commands run.
