@@ -123,7 +123,7 @@ def stored(secret: DatasetLocation) -> GitHubResponse:
     :param secret: The recorded secret.
     :return: GitHub's answer with it.
     """
-    return GitHubResponse(json.loads(secret.read_text()))
+    return GitHubResponse(json.loads(secret.read_text(encoding="utf-8")))
 
 
 def runs_replaying(
@@ -135,7 +135,11 @@ def runs_replaying(
     :return: A client answering with that listing.
     """
     return ReplayingRestClient(
-        {RunListing.path(repository, NOTES_BRANCH): json.loads(listing.read_text())}
+        {
+            RunListing.path(repository, NOTES_BRANCH): json.loads(
+                listing.read_text(encoding="utf-8")
+            )
+        }
     )
 
 

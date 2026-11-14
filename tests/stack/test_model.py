@@ -412,7 +412,9 @@ def test_the_board_reads_the_check_state_back_as_its_verdict(
 ):
     written = a_ready_branch_whose_checks_reached(state)
     board = tmp_path / RepositoryStateLocation.BOARD.name
-    board.write_text(json.dumps({BoardKey.PULL_REQUESTS: [asdict(written)]}))
+    board.write_text(
+        json.dumps({BoardKey.PULL_REQUESTS: [asdict(written)]}), encoding="utf-8"
+    )
 
     assert PullRequest.read_board(board) == [written]
 

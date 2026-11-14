@@ -64,7 +64,7 @@ class Fetch:
         :raises FetchFailed: If it exits non-zero.
         """
         completed = subprocess.run(
-            ["gh", "api", *arguments], capture_output=True, text=True
+            ["gh", "api", *arguments], capture_output=True, encoding="utf-8"
         )
         if completed.returncode != 0:
             raise FetchFailed(
@@ -228,7 +228,7 @@ def main(argv: list[str]) -> int:
     directory = Path(tempfile.mkdtemp(prefix="upstream-reviews-"))
     print(f"{len(lines)} chunks; print each with its own command:")
     for index, line in enumerate(lines, 1):
-        (directory / f"chunk-{index}").write_text(line + "\n")
+        (directory / f"chunk-{index}").write_text(line + "\n", encoding="utf-8")
         print(f"cat {directory}/chunk-{index}")
     return 0
 

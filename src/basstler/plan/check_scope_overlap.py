@@ -266,7 +266,7 @@ def run_git(repository_path: Path, *arguments: str) -> str:
         ["git", *arguments],
         cwd=repository_path,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     if result.returncode != 0:
         raise UnknownBranchError(f"git {' '.join(arguments)}", result.stderr.strip())

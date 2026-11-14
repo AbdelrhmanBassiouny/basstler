@@ -211,7 +211,9 @@ def test_pull_request_data_parsing_rejects_data_without_its_repository_level():
     with pytest.raises(MalformedPullRequestDataError):
         PullRequestRecord.parse_by_repository(
             json.loads(
-                DatasetLocation.PULL_REQUEST_DATA_KEYED_BY_NUMBER.value.read_text()
+                DatasetLocation.PULL_REQUEST_DATA_KEYED_BY_NUMBER.value.read_text(
+                    encoding="utf-8"
+                )
             )
         )
 

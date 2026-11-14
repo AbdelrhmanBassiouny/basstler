@@ -66,7 +66,7 @@ def published_file(repository: ScratchRepository, path: PurePosixPath) -> str | 
     """
     checkout = repository.clone_notes_branch(repository.project_root.parent / "verify")
     file = checkout / path
-    return file.read_text() if file.exists() else None
+    return file.read_text(encoding="utf-8") if file.exists() else None
 
 
 def notes_commit_count(repository: ScratchRepository) -> int:
@@ -237,8 +237,8 @@ def test_a_rejected_push_is_applied_again_to_the_branch_it_lost_to(notes_reposit
     )
     assert outcome == NotesWriteOutcome.PUSHED
     assert (
-        (checkout / NOTES_FILE).read_text(),
-        (checkout / RACING_FILE).read_text(),
+        (checkout / NOTES_FILE).read_text(encoding="utf-8"),
+        (checkout / RACING_FILE).read_text(encoding="utf-8"),
     ) == ("- the edit\n", "- race 1\n")
 
 

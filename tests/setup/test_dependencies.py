@@ -54,7 +54,7 @@ def test_a_declaration_naming_no_dependencies_is_read_as_needing_none(tmp_path):
     """
     declaration = tmp_path / PackageLocation.DEPENDENCY_DECLARATION.name
     declaration.write_text(
-        f'[{PyprojectKey.PROJECT}]\n{PyprojectKey.NAME} = "nothing"\n'
+        f'[{PyprojectKey.PROJECT}]\n{PyprojectKey.NAME} = "nothing"\n', encoding="utf-8"
     )
 
     assert DependencyDeclaration(declaration).dependencies() == ()
@@ -170,7 +170,7 @@ def test_a_declaration_that_is_not_toml_raises_naming_itself(tmp_path):
     which file to fix.
     """
     malformed = tmp_path / PackageLocation.DEPENDENCY_DECLARATION.value.name
-    malformed.write_text("this is not toml\n")
+    malformed.write_text("this is not toml\n", encoding="utf-8")
 
     with pytest.raises(MalformedDependencyDeclarationError) as raised:
         DependencyDeclaration(malformed).missing()

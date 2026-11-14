@@ -110,7 +110,7 @@ class ProjectDeclaration:
         :param path: A ``pyproject.toml``.
         :return: Its ``[project]`` table.
         """
-        table = tomllib.loads(path.read_text())[PyprojectKey.PROJECT]
+        table = tomllib.loads(path.read_text(encoding="utf-8"))[PyprojectKey.PROJECT]
         return cls(
             name=table[PyprojectKey.NAME],
             dependencies=tuple(table.get(PyprojectKey.DEPENDENCIES, ())),
@@ -166,7 +166,9 @@ class HatchVersionSource:
         :param path: A ``pyproject.toml``.
         :return: Its ``[tool.hatch.version]`` table.
         """
-        table = HatchVersionKey.version_table(tomllib.loads(path.read_text()))
+        table = HatchVersionKey.version_table(
+            tomllib.loads(path.read_text(encoding="utf-8"))
+        )
         return cls(
             source=table[HatchVersionKey.SOURCE],
             fallback_version=table.get(HatchVersionKey.FALLBACK_VERSION),

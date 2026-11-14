@@ -24,7 +24,7 @@ from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 
 
 def test_notes_naming_moved_modules_and_a_retired_skill_report_each_of_them():
-    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text()
+    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text(encoding="utf-8")
 
     stale = CitedNames.in_text(notes).stale(ShippedModules.installed())
 
@@ -37,7 +37,7 @@ def test_notes_naming_moved_modules_and_a_retired_skill_report_each_of_them():
 
 
 def test_a_retired_skill_is_reported_with_what_replaced_it():
-    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text()
+    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text(encoding="utf-8")
 
     stale = CitedNames.in_text(notes).stale(ShippedModules.installed())
 
@@ -45,7 +45,9 @@ def test_a_retired_skill_is_reported_with_what_replaced_it():
 
 
 def test_the_next_major_release_no_longer_reports_a_retired_skill():
-    notes = CitedNames.in_text(DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text())
+    notes = CitedNames.in_text(
+        DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text(encoding="utf-8")
+    )
     installed = ShippedModules.installed()
     next_major = replace(
         installed, major_version=RetiredSkill.PLAN_DASHBOARD.value.major_version + 1
@@ -78,7 +80,7 @@ def test_a_module_nothing_replaces_has_no_replacement():
 
 
 def test_notes_naming_only_shipped_names_report_nothing():
-    notes = DatasetLocation.NOTES_CITING_SHIPPED_NAMES.read_text()
+    notes = DatasetLocation.NOTES_CITING_SHIPPED_NAMES.read_text(encoding="utf-8")
 
     assert CitedNames.in_text(notes).stale(ShippedModules.installed()) == []
 
@@ -103,7 +105,7 @@ def plugin_documents() -> list[Path]:
     ids=lambda path: str(path.relative_to(RepositoryLocation.PLUGIN.value)),
 )
 def test_no_plugin_document_cites_a_name_this_release_does_not_ship(document: Path):
-    cited = CitedNames.in_text(document.read_text())
+    cited = CitedNames.in_text(document.read_text(encoding="utf-8"))
 
     assert cited.stale(ShippedModules.installed()) == []
 

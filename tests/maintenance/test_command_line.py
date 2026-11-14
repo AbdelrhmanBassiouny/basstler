@@ -204,7 +204,7 @@ def test_each_stack_is_derived_from_an_export_made_for_it_never_from_the_board_f
     fork_checkout.name_the_upstream()
     monkeypatch.chdir(fork_checkout.project_root)
     board = fork_checkout.project_root / RepositoryStateLocation.BOARD.name
-    board.write_text("not a board")
+    board.write_text("not a board", encoding="utf-8")
     maintenance = PassCountingItsExports(
         configuration=make_configuration(),
         git=fork_checkout.git,
@@ -216,7 +216,7 @@ def test_each_stack_is_derived_from_an_export_made_for_it_never_from_the_board_f
     maintenance.fresh_stack()
 
     assert len(maintenance.exports_made) == 2
-    assert board.read_text() == "not a board"
+    assert board.read_text(encoding="utf-8") == "not a board"
 
 
 @pytest.mark.parametrize(

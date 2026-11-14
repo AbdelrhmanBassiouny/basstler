@@ -42,7 +42,7 @@ def recorded(location: DatasetLocation) -> Any:
     :param location: A recorded response.
     :return: It, parsed.
     """
-    return json.loads(location.read_text())
+    return json.loads(location.read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -231,7 +231,7 @@ def test_the_issue_follows_the_same_runs_of_the_tests_as_the_release():
     exactly the runs the release reads.
     """
     recording, release = (
-        yaml.safe_load(location.read_text())[True]
+        yaml.safe_load(location.read_text(encoding="utf-8"))[True]
         for location in (
             RepositoryLocation.MAIN_FAILURE_WORKFLOW,
             RepositoryLocation.RELEASE_WORKFLOW,

@@ -61,7 +61,7 @@ def publish_notes(remote_root: Path, repository: Repository, files: dict[Path, s
     for relative_path, content in files.items():
         path = work / ProjectLocation.PLANS / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
     git = GitCommandRunner(work)
     git.run("add", "--all")
     git.run(
@@ -98,7 +98,7 @@ def test_the_hub_file_round_trips(tmp_path: Path):
         site_url=SiteSampleText.SITE_URL.value,
     )
     path = tmp_path / ProjectLocation.PLAN_HUB.name
-    path.write_text(hub.to_text())
+    path.write_text(hub.to_text(), encoding="utf-8")
 
     assert PlanHub.load(path) == hub
 
@@ -146,7 +146,9 @@ def test_an_unreadable_registry_says_how_the_build_reads_a_private_one(
 
 def test_a_fetched_notes_branch_reads_and_checks_out_its_plans(tmp_path: Path):
     manifest_path = Path(SitePlan.FIRST) / PlanDocument.MANIFEST
-    publish_notes(tmp_path, REGISTRY, {manifest_path: PLAN_MANIFEST.read_text()})
+    publish_notes(
+        tmp_path, REGISTRY, {manifest_path: PLAN_MANIFEST.read_text(encoding="utf-8")}
+    )
 
     notes = NotesBranch.fetch(
         REGISTRY,
@@ -157,9 +159,11 @@ def test_a_fetched_notes_branch_reads_and_checks_out_its_plans(tmp_path: Path):
     plans_directory = notes.check_out_plans()
 
     assert notes.read(ProjectLocation.PLANS / manifest_path) == (
-        PLAN_MANIFEST.read_text().strip()
+        PLAN_MANIFEST.read_text(encoding="utf-8").strip()
     )
-    assert (plans_directory / manifest_path).read_text() == PLAN_MANIFEST.read_text()
+    assert (plans_directory / manifest_path).read_text(
+        encoding="utf-8"
+    ) == PLAN_MANIFEST.read_text(encoding="utf-8")
 
 
 def test_a_repository_that_cannot_be_fetched_reads_as_none(tmp_path: Path):
@@ -188,7 +192,10 @@ def commit_plan_change(
     work = Path(repository.clone_url_under(str(remote_root))).with_suffix(".work")
     path = work / ProjectLocation.PLANS / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"{path.read_text() if path.exists() else ''}# {committed_at}\n")
+    path.write_text(
+        f"{path.read_text(encoding='utf-8') if path.exists() else ''}# {committed_at}\n",
+        encoding="utf-8",
+    )
     git = GitCommandRunner(work)
     git.run("add", "--all")
     dates = {"GIT_AUTHOR_DATE": committed_at, "GIT_COMMITTER_DATE": committed_at}
@@ -284,7 +291,9 @@ def write_hub(directory: Path, site_url: str | None) -> Path:
     :return: The written hub file.
     """
     path = directory / ProjectLocation.PLAN_HUB.name
-    path.write_text(PlanHub(registry=str(REGISTRY), site_url=site_url).to_text())
+    path.write_text(
+        PlanHub(registry=str(REGISTRY), site_url=site_url).to_text(), encoding="utf-8"
+    )
     return path
 
 

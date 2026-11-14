@@ -196,7 +196,7 @@ class ProseLengthChecker(CodeRuleChecker):
 
     @override
     def violations(self, path: Path) -> Iterator[CodeRuleViolation]:
-        for block in SourceProse(path.read_text()).blocks:
+        for block in SourceProse(path.read_text(encoding="utf-8")).blocks:
             limit = self.limit_for(block.kind)
             if block.prose_lines <= limit:
                 continue

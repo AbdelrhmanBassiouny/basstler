@@ -112,8 +112,8 @@ def flush_version() -> PlanVersion:
     :return: :attr:`DatasetLocation.FLUSH_SEQUENCES_PLAN` as the session read it.
     """
     return PlanVersion(
-        manifest_text=DatasetLocation.FLUSH_SEQUENCES_PLAN.read_text(),
-        roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(),
+        manifest_text=DatasetLocation.FLUSH_SEQUENCES_PLAN.read_text(encoding="utf-8"),
+        roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(encoding="utf-8"),
     )
 
 
@@ -128,9 +128,9 @@ def test_dropping_one_flush_item_keeps_the_others():
 
 def test_a_flush_plan_field_the_session_changed_is_merged_whole():
     session = PlanVersion(
-        manifest_text=DatasetLocation.FLUSH_SEQUENCES_PLAN.read_text().replace(
-            'name: "A track"', 'name: "A renamed track"'
-        ),
+        manifest_text=DatasetLocation.FLUSH_SEQUENCES_PLAN.read_text(
+            encoding="utf-8"
+        ).replace('name: "A track"', 'name: "A renamed track"'),
         roadmap_text=flush_version().roadmap_text,
     )
     latest = deferred(flush_version(), SECOND_ITEM)
@@ -145,10 +145,10 @@ def test_a_flush_plan_field_the_session_changed_is_merged_whole():
 
 def test_a_plan_field_the_session_changed_joins_an_item_edit():
     session = PlanVersion(
-        manifest_text=DatasetLocation.BOOTSTRAP_PLAN.read_text().replace(
-            "A plan under test", "A plan renamed by the session"
-        ),
-        roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(),
+        manifest_text=DatasetLocation.BOOTSTRAP_PLAN.read_text(
+            encoding="utf-8"
+        ).replace("A plan under test", "A plan renamed by the session"),
+        roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(encoding="utf-8"),
     )
     latest = deferred(read_version(), SECOND_ITEM)
 
@@ -202,10 +202,10 @@ def test_an_item_the_session_changed_but_another_writer_dropped_is_refused():
 def test_a_plan_field_both_writers_changed_differently_is_refused():
     def renamed(title: str) -> PlanVersion:
         return PlanVersion(
-            manifest_text=DatasetLocation.BOOTSTRAP_PLAN.read_text().replace(
-                "A plan under test", title
-            ),
-            roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(),
+            manifest_text=DatasetLocation.BOOTSTRAP_PLAN.read_text(
+                encoding="utf-8"
+            ).replace("A plan under test", title),
+            roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(encoding="utf-8"),
         )
 
     with pytest.raises(ConcurrentEditError) as refusal:

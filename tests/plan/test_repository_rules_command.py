@@ -31,7 +31,9 @@ RULES_FILE = PurePosixPath(ProjectLocation.PLAN_RULES)
 Where the rules file sits on the notes branch.
 """
 
-STARTING_RULES = RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
+STARTING_RULES = RepositoryRules.from_yaml(
+    DatasetLocation.REPOSITORY_RULES.read_text(encoding="utf-8")
+)
 """
 The rules the notes branch starts with.
 """
@@ -48,7 +50,7 @@ def rules_repository(
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
-        {RULES_FILE: DatasetLocation.REPOSITORY_RULES.read_text()}
+        {RULES_FILE: DatasetLocation.REPOSITORY_RULES.read_text(encoding="utf-8")}
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)

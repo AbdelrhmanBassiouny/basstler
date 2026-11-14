@@ -101,7 +101,7 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     """
     a_parent_and_child(fork_checkout)
     maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
-    maintenance.board.write_text("{}")
+    maintenance.board.write_text("{}", encoding="utf-8")
 
     RunReportCommand().run(
         maintenance, argparse.Namespace(json=True, summaries=None, stacked_on=None)

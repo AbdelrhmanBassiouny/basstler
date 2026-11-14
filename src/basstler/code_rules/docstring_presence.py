@@ -126,7 +126,7 @@ class MissingDocstringChecker(CodeRuleChecker):
 
     @override
     def violations(self, path: Path) -> Iterator[CodeRuleViolation]:
-        module = ast.parse(path.read_text())
+        module = ast.parse(path.read_text(encoding="utf-8"))
         if module.body and ast.get_docstring(module) is None:
             yield self.violation(
                 path, DocumentedKind.MODULE, 1, module.body[-1].end_lineno

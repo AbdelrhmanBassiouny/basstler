@@ -197,7 +197,7 @@ def released_checkout(tmp_path) -> ScratchRepository:
         repository.write(path, "")
     repository.write(
         ReleaseSampleFile.PLUGIN_MANIFEST,
-        RepositoryLocation.PLUGIN_MANIFEST.read_text(),
+        RepositoryLocation.PLUGIN_MANIFEST.read_text(encoding="utf-8"),
     )
     repository.commit_everything("Release")
     repository.git.run("tag", version(ReleaseSampleVersion.RELEASED).tag)
@@ -364,7 +364,8 @@ def test_a_pull_request_reached_by_several_commits_is_read_once(tmp_path):
                 pull_request_json(1, VersionPart.MINOR.label),
                 pull_request_json(2),
             ]
-        )
+        ),
+        encoding="utf-8",
     )
 
     assert MergedPullRequest.read_all(listed) == (
@@ -477,14 +478,16 @@ def release_workflow_file() -> dict[Any, Any]:
     """
     :return: The release workflow as YAML loads it, which reads the ``on`` key as ``True``.
     """
-    return yaml.safe_load(RepositoryLocation.RELEASE_WORKFLOW.read_text())
+    return yaml.safe_load(
+        RepositoryLocation.RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    )
 
 
 def test_the_release_runs_when_a_tests_run_on_main_completes():
     workflow = DeclaredWorkflow.at(RepositoryLocation.RELEASE_WORKFLOW)
-    tests_name = yaml.safe_load(RepositoryLocation.TESTS_WORKFLOW.read_text())[
-        WorkflowFileKey.NAME
-    ]
+    tests_name = yaml.safe_load(
+        RepositoryLocation.TESTS_WORKFLOW.read_text(encoding="utf-8")
+    )[WorkflowFileKey.NAME]
 
     assert workflow.triggers == (
         Trigger(
@@ -610,7 +613,9 @@ def run_release_step(
     :param labels: The labels of the one pull request merged since the latest release.
     :return: The finished step.
     """
-    files.pull_requests.write_text(json.dumps([pull_request_json(1, *labels)]))
+    files.pull_requests.write_text(
+        json.dumps([pull_request_json(1, *labels)]), encoding="utf-8"
+    )
     return BashCommandRunner(project_root=checkout, script=release_step_script()).run(
         **{
             SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
@@ -715,7 +720,7 @@ def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_
         published_checkout.remote_commit(Branch(release_branch()).reference)
         == merge_commit
     )
-    assert release_step_files.output.read_text() == f"tag={tag}\n"
+    assert release_step_files.output.read_text(encoding="utf-8") == f"tag={tag}\n"
 
 
 def test_the_release_step_moves_the_plugin_release_branch_to_the_released_plugin(
@@ -816,7 +821,7 @@ def test_the_release_step_does_nothing_when_nothing_changed(
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Nothing changed" in release_step_files.summary.read_text()
+    assert "Nothing changed" in release_step_files.summary.read_text(encoding="utf-8")
     assert not release_step_files.output.exists()
 
 

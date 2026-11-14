@@ -51,7 +51,7 @@ def reading_set(document: Path) -> set[Path]:
         reached.add(current)
         pending += [
             (current.parent / target).resolve()
-            for target in linked_files(current.read_text())
+            for target in linked_files(current.read_text(encoding="utf-8"))
             if target.endswith(".md")
         ]
     return reached
@@ -72,11 +72,15 @@ The kickoff skill's own document.
 
 @pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
 def test_no_skill_document_is_over_its_length(document: Path):
-    assert len(document.read_text()) <= SkillDocumentLimit.DOCUMENT_LENGTH
+    assert (
+        len(document.read_text(encoding="utf-8")) <= SkillDocumentLimit.DOCUMENT_LENGTH
+    )
 
 
 def test_a_kickoff_hands_a_session_at_most_its_reading_length():
-    length = sum(len(path.read_text()) for path in reading_set(KICKOFF_SKILL))
+    length = sum(
+        len(path.read_text(encoding="utf-8")) for path in reading_set(KICKOFF_SKILL)
+    )
 
     assert length <= SkillDocumentLimit.KICKOFF_READING_LENGTH
 
@@ -87,7 +91,7 @@ def test_the_kickoff_reading_set_follows_the_kickoffs_links():
     """
     linked = {
         (KICKOFF_SKILL.parent / target).resolve()
-        for target in linked_files(KICKOFF_SKILL.read_text())
+        for target in linked_files(KICKOFF_SKILL.read_text(encoding="utf-8"))
     }
 
     assert linked <= reading_set(KICKOFF_SKILL)

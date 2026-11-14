@@ -12,6 +12,8 @@ covered without this file being edited.
 
 from __future__ import annotations
 
+import os
+
 import re
 import subprocess
 from enum import StrEnum
@@ -19,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation
 from basstler.shell_configuration import ShellConfigurationFunction
 
@@ -48,9 +51,11 @@ class ShellConstant(StrEnum):
             / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
         )
         result = subprocess.run(
-            ["bash", "-c", f'source "{configuration}"; printf "%s" "${{{self}}}"'],
+            Bash.locate(os.environ).command(
+                "-c", f'source "{configuration}"; printf "%s" "${{{self}}}"'
+            ),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
         )
         return result.stdout
@@ -82,7 +87,7 @@ def staleness_document() -> str:
     """
     return (
         RepositoryLocation.PLUGIN / SkillDirectory.MANIFEST_STALENESS_DOCUMENT
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
 
 def linked_documents(skill: Path) -> set[Path]:
@@ -92,7 +97,7 @@ def linked_documents(skill: Path) -> set[Path]:
     """
     return {
         (skill.parent / target).resolve()
-        for target in re.findall(r"\]\(([^)#\s]+)\)", skill.read_text())
+        for target in re.findall(r"\]\(([^)#\s]+)\)", skill.read_text(encoding="utf-8"))
     }
 
 
@@ -106,7 +111,10 @@ def skills_writing_plan_data() -> list[Path]:
         for instructions in (RepositoryLocation.PLUGIN / SkillDirectory.DIRECTORY).glob(
             f"*/{SkillFile.INSTRUCTIONS}"
         )
-        if any(script in instructions.read_text() for script in PlanWritingScript)
+        if any(
+            script in instructions.read_text(encoding="utf-8")
+            for script in PlanWritingScript
+        )
     )
 
 

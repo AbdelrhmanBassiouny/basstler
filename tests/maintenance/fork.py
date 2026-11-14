@@ -313,7 +313,7 @@ class ForkCheckout:
             ["git", *arguments],
             cwd=self.project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         )
         assert result.returncode == 0, result.stderr
         return result.stdout.strip()
@@ -326,7 +326,7 @@ class ForkCheckout:
         :param content: What to write into it.
         :return: The new commit's hash.
         """
-        (self.project_root / name).write_text(content)
+        (self.project_root / name).write_text(content, encoding="utf-8")
         self.run_git("add", name)
         self.run_git("commit", "--quiet", "-m", f"write {name}")
         return self.run_git("rev-parse", "HEAD")

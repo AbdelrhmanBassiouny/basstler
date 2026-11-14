@@ -47,13 +47,13 @@ def candidate_forks() -> set[Repository]:
         else set()
     )
     listed = subprocess.run(
-        ["git", "remote"], capture_output=True, text=True, check=True
+        ["git", "remote"], capture_output=True, encoding="utf-8", check=True
     ).stdout.split()
     urls = (
         subprocess.run(
             ["git", "remote", "get-url", name],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
         ).stdout.strip()
         for name in listed
@@ -70,7 +70,7 @@ def test_the_skill_names_no_fork_of_its_own():
     """
     The fork is configuration, so the skill has to read it rather than spell it out.
     """
-    skill = MAINTENANCE_SKILL_DOCUMENT.read_text()
+    skill = MAINTENANCE_SKILL_DOCUMENT.read_text(encoding="utf-8")
 
     for fork in candidate_forks():
         assert fork.owner not in skill
@@ -83,7 +83,7 @@ def test_the_skill_writes_no_tooling_into_the_checkout():
     the working tree - and anything it did bring there, on a branch whose next commit is a
     restack merge, would be carried into somebody's feature branch.
     """
-    skill = MAINTENANCE_SKILL_DOCUMENT.read_text()
+    skill = MAINTENANCE_SKILL_DOCUMENT.read_text(encoding="utf-8")
 
     assert "git restore --source=" not in skill
     assert "git checkout <ref> --" not in skill

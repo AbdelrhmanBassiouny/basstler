@@ -55,7 +55,7 @@ def test_the_site_styles_every_status_css_class(status):
     stylesheet has to know that name.
     """
     item = Item(title="A", branch="a", track="track-1", status=status)
-    stylesheet = SiteTemplate.STYLESHEET.read_text()
+    stylesheet = SiteTemplate.STYLESHEET.read_text(encoding="utf-8")
     assert f".item.{item.status_and_drift_css_class} " in stylesheet
 
 

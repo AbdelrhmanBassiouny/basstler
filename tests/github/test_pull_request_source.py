@@ -126,11 +126,17 @@ def test_github_source_reads_the_checks_of_an_open_pull_request():
                 ],
                 commit_report_path(CommitReport.CHECK_RUNS): [
                     json.loads(
-                        RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text()
+                        RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text(
+                            encoding="utf-8"
+                        )
                     )
                 ],
                 commit_report_path(CommitReport.STATUS): [
-                    json.loads(RecordedCommitChecks.NO_STATUSES.value.read_text())
+                    json.loads(
+                        RecordedCommitChecks.NO_STATUSES.value.read_text(
+                            encoding="utf-8"
+                        )
+                    )
                 ],
             },
         )
@@ -248,7 +254,7 @@ def test_github_source_answers_no_issue_url_on_a_repository_it_cannot_read():
 
 
 def test_github_source_reads_the_upstream_of_a_fork():
-    fork = json.loads(DatasetLocation.REPOSITORY_FORK.read_text())
+    fork = json.loads(DatasetLocation.REPOSITORY_FORK.read_text(encoding="utf-8"))
     source = GitHubPullRequestSource(
         RecordedGitHubClient(responses={f"/{PLAN_REPOSITORY.api_path}": fork})
     )
@@ -267,7 +273,7 @@ def test_github_source_finds_no_upstream_for_a_repository_that_is_not_a_fork():
 
 
 def test_github_source_records_the_upstream_of_each_fork_it_read_pull_requests_of():
-    fork = json.loads(DatasetLocation.REPOSITORY_FORK.read_text())
+    fork = json.loads(DatasetLocation.REPOSITORY_FORK.read_text(encoding="utf-8"))
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
             responses={f"/{PLAN_REPOSITORY.api_path}": fork},

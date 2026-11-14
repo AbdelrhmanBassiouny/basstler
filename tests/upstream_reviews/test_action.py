@@ -256,7 +256,7 @@ def test_the_run_answers_a_pull_request_report_request_with_its_recording(
         basstler.upstream_reviews.action.run, "GitHubCommandLineClient", github
     )
     request_file = tmp_path / ActionFile.REQUEST
-    request_file.write_text(json.dumps(request().as_sent()))
+    request_file.write_text(json.dumps(request().as_sent()), encoding="utf-8")
 
     answer = ActionRun(request_file, GitCommandRunner(tmp_path), "origin").answer()
 
@@ -287,7 +287,7 @@ def test_concurrent_requests_are_never_queued_behind_or_cancelled_by_each_other(
     """
     reusable = (
         PackageLocation.SOURCE_TREE / BasstlerSource.REUSABLE_WORKFLOW
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "concurrency" not in ActionInstallation(BRANCH_OR_TAG).workflow
     assert "concurrency" not in reusable
@@ -305,7 +305,7 @@ def test_the_caller_workflow_is_rendered_without_html_escaping():
 def test_the_reusable_workflow_runs_this_module():
     reusable = (
         PackageLocation.SOURCE_TREE / BasstlerSource.REUSABLE_WORKFLOW
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     command_path = basstler.upstream_reviews.action.__main__.__package__
     assert f"python -m {command_path} {ActionCommand.RUN}" in reusable
@@ -369,7 +369,11 @@ class Fork:
 def git(directory: Path, *arguments: str) -> str:
     """:return: What git printed in *directory*, stripped."""
     return subprocess.run(
-        ["git", *arguments], cwd=directory, check=True, capture_output=True, text=True
+        ["git", *arguments],
+        cwd=directory,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
     ).stdout.strip()
 
 
@@ -388,7 +392,7 @@ def fork(tmp_path, monkeypatch) -> Fork:
     git(tmp_path, "init", "--quiet", "--bare", "--initial-branch=main", str(remote))
     clone = tmp_path / "clone"
     git(tmp_path, "clone", "--quiet", f"file://{remote}", str(clone))
-    (clone / "project.txt").write_text("project\n")
+    (clone / "project.txt").write_text("project\n", encoding="utf-8")
     git(clone, "add", "project.txt")
     git(clone, "commit", "--quiet", "-m", "Project")
     git(clone, "push", "--quiet", "origin", "HEAD:main")
@@ -773,6 +777,6 @@ def test_status_prints_the_state_and_the_installed_release(fork, capsys):
 def test_the_shell_configuration_names_the_same_branch():
     configuration = (
         RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert f'UPSTREAM_REVIEWS_ACTION_BRANCH="{ActionBranch.NAME}"' in configuration

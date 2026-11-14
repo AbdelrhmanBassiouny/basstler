@@ -65,7 +65,9 @@ def test_first_notes_are_saved_without_the_sections_the_session_start_generated(
         notes_saving_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
     )
     first_notes = "- Open every pull request as a draft.\n"
-    local_instructions.write_text(first_notes + local_instructions.read_text())
+    local_instructions.write_text(
+        first_notes + local_instructions.read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     saving = notes_saving_repository.run_hook_script(
         PluginLocation.PERSONAL_NOTES_SAVING_SCRIPT.name
@@ -73,5 +75,7 @@ def test_first_notes_are_saved_without_the_sections_the_session_start_generated(
 
     assert saving.returncode == 0, saving.stderr
     checkout = notes_saving_repository.clone_notes_branch(tmp_path / "notes")
-    saved_notes = (checkout / ProjectLocation.PERSONAL_NOTES_DOCUMENT).read_text()
+    saved_notes = (checkout / ProjectLocation.PERSONAL_NOTES_DOCUMENT).read_text(
+        encoding="utf-8"
+    )
     assert saved_notes == first_notes

@@ -19,13 +19,15 @@ from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..scratch_repository import ScratchRepository
 
-PERSONAL_SETTINGS = (DatasetLocation.DIRECTORY / "personal-settings.json").read_text()
+PERSONAL_SETTINGS = (DatasetLocation.DIRECTORY / "personal-settings.json").read_text(
+    encoding="utf-8"
+)
 UPDATED_PERSONAL_SETTINGS = (
     DatasetLocation.DIRECTORY / "personal-settings-updated.json"
-).read_text()
+).read_text(encoding="utf-8")
 LOCALLY_EDITED_SETTINGS = (
     DatasetLocation.DIRECTORY / "personal-settings-locally-edited.json"
-).read_text()
+).read_text(encoding="utf-8")
 
 
 @pytest.fixture
@@ -78,7 +80,9 @@ def local_settings_of(repository: ScratchRepository) -> str:
     :param repository: The scratch repository to read from.
     :return: The file's content.
     """
-    return (repository.project_root / PersonalNotesPath.LOCAL_SETTINGS).read_text()
+    return (repository.project_root / PersonalNotesPath.LOCAL_SETTINGS).read_text(
+        encoding="utf-8"
+    )
 
 
 def settings_on_notes_branch(repository: ScratchRepository) -> str:
@@ -92,7 +96,9 @@ def settings_on_notes_branch(repository: ScratchRepository) -> str:
     checkout = repository.clone_notes_branch(
         repository.project_root.parent / "settings-verify-checkout"
     )
-    return (checkout / PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH).read_text()
+    return (checkout / PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH).read_text(
+        encoding="utf-8"
+    )
 
 
 # %% syncing settings out of the personal-notes branch
@@ -244,7 +250,7 @@ def test_records_the_settings_stamp_in_the_git_directory(
         RepositoryStateLocation.PERSONAL_SETTINGS_SYNC_STAMP
     )
     assert (
-        stamp.read_text().strip()
+        stamp.read_text(encoding="utf-8").strip()
         == settings_repository.run_git(
             "hash-object", str(PersonalNotesPath.LOCAL_SETTINGS)
         ).stdout.strip()

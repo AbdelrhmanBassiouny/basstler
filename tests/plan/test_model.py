@@ -73,7 +73,7 @@ def test_a_manifest_read_from_yaml_text_equals_the_one_read_from_its_file(other_
     Parsing a manifest's text gives what reading its file gives.
     """
     path = DatasetLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST
-    assert PlanManifest.from_yaml(path.read_text()) == other_plan
+    assert PlanManifest.from_yaml(path.read_text(encoding="utf-8")) == other_plan
 
 
 def test_an_empty_yaml_text_is_an_empty_manifest():

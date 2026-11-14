@@ -75,7 +75,7 @@ def _run_ruff_format(file_path: Path) -> bool:
             str(file_path),
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     return result.returncode == 0
 
@@ -96,7 +96,7 @@ def _run_docformatter(file_path: Path) -> bool:
             str(file_path),
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     # docformatter exits 3 when it changed the file and 0 when it left it alone.
     return result.returncode in (0, 3)
@@ -110,28 +110,30 @@ def _format_file(path: Path) -> FileFormattingOutcome:
     :param path: The file to format.
     :return: The formatting outcome for ``path``.
     """
-    original_content = path.read_text()
+    original_content = path.read_text(encoding="utf-8")
 
     with tempfile.TemporaryDirectory() as scratch_directory:
         scratch_path = Path(scratch_directory) / path.name
-        scratch_path.write_text(original_content)
+        scratch_path.write_text(original_content, encoding="utf-8")
 
         if not _run_ruff_format(scratch_path):
             return FileFormattingOutcome(
                 path, original_content, original_content, False
             )
-        formatter_only_content = scratch_path.read_text()
+        formatter_only_content = scratch_path.read_text(encoding="utf-8")
 
         docformatter_succeeded = _run_docformatter(scratch_path)
         after_docformatter_content = (
-            scratch_path.read_text() if docformatter_succeeded else None
+            scratch_path.read_text(encoding="utf-8") if docformatter_succeeded else None
         )
 
         formatter_succeeded_again = docformatter_succeeded and _run_ruff_format(
             scratch_path
         )
         reconverged_content = (
-            scratch_path.read_text() if formatter_succeeded_again else None
+            scratch_path.read_text(encoding="utf-8")
+            if formatter_succeeded_again
+            else None
         )
 
     docstrings_are_stable = (
@@ -164,7 +166,7 @@ def main(file_arguments: Sequence[str]) -> int:
         if outcome.final_content == outcome.original_content:
             continue
 
-        outcome.path.write_text(outcome.final_content)
+        outcome.path.write_text(outcome.final_content, encoding="utf-8")
         any_file_changed = True
 
         if not outcome.docstrings_reformatted:

@@ -115,7 +115,9 @@ def test_a_merge_carrying_a_change_of_its_own_is_kept(fork_checkout: ForkCheckou
     fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
     fork_checkout.run_git("checkout", "--quiet", "a-child")
     fork_checkout.run_git("merge", "--quiet", "--no-commit", "a-parent")
-    (fork_checkout.project_root / "a-child-file").write_text("edited while merging\n")
+    (fork_checkout.project_root / "a-child-file").write_text(
+        "edited while merging\n", encoding="utf-8"
+    )
     fork_checkout.run_git("commit", "--quiet", "--all", "--no-edit")
     fork_checkout.run_git("push", "--quiet", "origin", "a-child:a-child")
     fork_checkout.run_git("fetch", "--quiet", "origin")

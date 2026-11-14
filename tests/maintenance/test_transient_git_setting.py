@@ -35,7 +35,7 @@ def test_a_setting_added_on_top_of_another_leaves_both_in_force(
             cwd=scratch_repository.project_root,
             env=environment,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
         ).stdout.strip()
         for setting in settings

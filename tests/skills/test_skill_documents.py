@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.bash import Bash
 from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
 
 from ..constants.paths import RepositoryLocation, SkillDirectory
@@ -51,7 +52,11 @@ def cited_shell_variables(document: Path) -> set[str]:
     :param document: A skill document.
     :return: The name of every shell variable the document references in braces.
     """
-    return set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", document.read_text()))
+    return set(
+        re.findall(
+            r"\$\{([A-Za-z_][A-Za-z0-9_]*)", document.read_text(encoding="utf-8")
+        )
+    )
 
 
 class SkillDocumentName(StrEnum):
@@ -82,7 +87,10 @@ def bash_blocks(document: Path) -> list[str]:
     :param document: A skill document.
     :return: The commands of every fenced bash block in it, one entry per block.
     """
-    return [match.group(2) for match in BASH_BLOCK.finditer(document.read_text())]
+    return [
+        match.group(2)
+        for match in BASH_BLOCK.finditer(document.read_text(encoding="utf-8"))
+    ]
 
 
 def skill_documents() -> list[Path]:
@@ -133,25 +141,23 @@ class ShellConfiguration:
             / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
         )
         result = subprocess.run(
-            [
-                "bash",
+            Bash.locate(os.environ).command(
                 "-c",
                 f'source "{configuration}" >/dev/null 2>&1; '
                 'for name in $(compgen -v); do printf "%s\\0%s\\0" "$name" "${!name}"; done',
-            ],
+            ),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
             cwd=RepositoryLocation.ROOT,
         )
         functions = subprocess.run(
-            [
-                "bash",
+            Bash.locate(os.environ).command(
                 "-c",
                 f'source "{configuration}" >/dev/null 2>&1; compgen -A function',
-            ],
+            ),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
             cwd=RepositoryLocation.ROOT,
         )
@@ -199,7 +205,7 @@ def shell_configuration() -> ShellConfiguration:
 
 @pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
 def test_every_file_a_skill_document_links_to_is_there(document: Path) -> None:
-    linked = linked_files(document.read_text())
+    linked = linked_files(document.read_text(encoding="utf-8"))
 
     missing = {
         target for target in linked if not (document.parent / target).resolve().exists()
@@ -298,7 +304,7 @@ def test_every_skill_links_how_to_run_commands_with_its_plugin_root(
     )
     mapping_paragraphs = [
         paragraph
-        for paragraph in document.read_text().split("\n\n")
+        for paragraph in document.read_text(encoding="utf-8").split("\n\n")
         if f"${{{BasstlerVariable.PLUGIN_ROOT}}}" in paragraph
         and f"${{{ClaudeCodeVariable.PLUGIN_ROOT}}}" in paragraph
         and f"]({running_commands})" in paragraph
@@ -324,7 +330,7 @@ def test_the_resolve_skill_links_the_pull_request_rules() -> None:
         document.parent,
     )
 
-    assert pull_request_rules in linked_files(document.read_text())
+    assert pull_request_rules in linked_files(document.read_text(encoding="utf-8"))
 
 
 # %% the interpreter a module is run with
@@ -341,7 +347,7 @@ def test_no_skill_document_runs_the_package_with_a_bare_interpreter(document: Pa
     """
     Each skill links the shared rules for running commands and says what plugin root they name.
     """
-    assert BARE_INTERPRETER_RUN.findall(document.read_text()) == []
+    assert BARE_INTERPRETER_RUN.findall(document.read_text(encoding="utf-8")) == []
 
 
 # %% where a skill writes its files
@@ -357,7 +363,7 @@ publish from.
 def test_no_skill_document_writes_under_the_system_temporary_directory(
     document: Path,
 ):
-    assert SYSTEM_TEMPORARY_PATH.findall(document.read_text()) == []
+    assert SYSTEM_TEMPORARY_PATH.findall(document.read_text(encoding="utf-8")) == []
 
 
 # %% the description claude.ai stores
@@ -387,6 +393,6 @@ def test_no_skill_description_holds_an_angle_bracket(document: Path) -> None:
     claude.ai warns about a description that holds an XML tag and stores it with its
     angle brackets removed, so a placeholder such as ``<plan-id>`` loses its markers.
     """
-    description = SKILL_DESCRIPTION.match(document.read_text())
+    description = SKILL_DESCRIPTION.match(document.read_text(encoding="utf-8"))
 
     assert ANGLE_BRACKET.findall(description.group(1)) == []

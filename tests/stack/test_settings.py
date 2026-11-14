@@ -57,7 +57,9 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
     :return: The path :meth:`Configuration.load` should be pointed at.
     """
     path = scratch_repository.install_stack_configuration(
-        DatasetLocation.COMMITTED_DEFAULT_STACK_CONFIGURATION.read_text()
+        DatasetLocation.COMMITTED_DEFAULT_STACK_CONFIGURATION.read_text(
+            encoding="utf-8"
+        )
     )
     scratch_repository.add_remote(
         RemoteName.UNEXPECTED, StackRepository.FORK.value.clone_url
@@ -344,7 +346,7 @@ def test_a_project_committing_no_stack_file_takes_its_upstream_from_personal_not
     personal-notes layer names it.
     """
     configuration_path = scratch_repository.install_stack_configuration(
-        PackageLocation.STACK_CONFIGURATION.value.read_text()
+        PackageLocation.STACK_CONFIGURATION.value.read_text(encoding="utf-8")
     )
     scratch_repository.add_remote(
         RemoteName.UNEXPECTED, StackRepository.FORK.value.clone_url
@@ -374,7 +376,7 @@ def _shipped_configuration_path(scratch_repository: ScratchRepository) -> Path:
     :return: The shipped defaults, which name no upstream, installed into it.
     """
     return scratch_repository.install_stack_configuration(
-        PackageLocation.STACK_CONFIGURATION.value.read_text()
+        PackageLocation.STACK_CONFIGURATION.value.read_text(encoding="utf-8")
     )
 
 

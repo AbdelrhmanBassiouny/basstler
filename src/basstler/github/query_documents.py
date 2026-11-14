@@ -33,4 +33,4 @@ class GraphQLDocument(StrEnum):
 
     def read(self) -> str:
         """:return: The document's text."""
-        return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
+        return (PackageLocation.QUERIES / f"{self}.graphql").read_text(encoding="utf-8")

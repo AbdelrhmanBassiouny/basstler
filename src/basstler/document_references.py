@@ -287,7 +287,9 @@ def report_stale_references(*documents: Path) -> int:
     """
     shipped = ShippedModules.installed()
     for document in documents:
-        for reference in CitedNames.in_text(document.read_text()).stale(shipped):
+        for reference in CitedNames.in_text(document.read_text(encoding="utf-8")).stale(
+            shipped
+        ):
             logger.info(reference.as_line())
     return 0
 

@@ -213,7 +213,9 @@ class PlanHub:
         :param path: The hub file, which may not exist.
         :return: The hub, or ``None`` when the file is absent or empty.
         """
-        return cls.from_yaml(path.read_text()) if path.is_file() else None
+        return (
+            cls.from_yaml(path.read_text(encoding="utf-8")) if path.is_file() else None
+        )
 
     @classmethod
     def from_registry(
@@ -462,7 +464,7 @@ def register_repository(arguments: argparse.Namespace) -> int:
     if arguments.site_url and hub.site_url != arguments.site_url:
         hub.site_url = arguments.site_url
         changed = True
-    arguments.output.write_text(hub.to_text())
+    arguments.output.write_text(hub.to_text(), encoding="utf-8")
     logger.info(json.dumps({"changed": changed}))
     return 0
 

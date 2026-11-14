@@ -112,7 +112,7 @@ def test_the_upstream_section_and_the_promotion_section_keep_each_other():
 
 
 def test_a_heading_of_the_description_s_own_that_starts_like_the_promotion_heading_is_kept():
-    prose = DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text()
+    prose = DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text(encoding="utf-8")
 
     written = PullRequestDescription(prose).with_promotion_link(
         PromotionSampleText.FIRST_LINK

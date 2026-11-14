@@ -160,7 +160,10 @@ class MergedPullRequest(ValidatedJSONModel):
             a pull request reached by several commits appears more than once.
         :return: Each pull request once.
         """
-        parsed = (cls.from_json(entry) for entry in json.loads(path.read_text()))
+        parsed = (
+            cls.from_json(entry)
+            for entry in json.loads(path.read_text(encoding="utf-8"))
+        )
         return tuple({pull.number: pull for pull in parsed}.values())
 
     @property

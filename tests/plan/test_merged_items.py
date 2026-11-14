@@ -162,13 +162,13 @@ def test_a_failed_read_ends_with_its_own_status_and_changes_nothing(
     """
     manifest_path = tmp_path / PlanDocument.MANIFEST
     plan.manifest.write(manifest_path)
-    written = manifest_path.read_text()
+    written = manifest_path.read_text(encoding="utf-8")
     failure = GitHubUnreachableError(HttpMethod.GET, "repos/owner/repo/pulls", "down")
 
     status = MergedItems.record(manifest_path, UnreachablePullRequestSource(failure))
 
     assert status == failure.exit_code
-    assert manifest_path.read_text() == written
+    assert manifest_path.read_text(encoding="utf-8") == written
 
 
 def test_recording_reports_a_repository_it_cannot_read(
@@ -199,7 +199,7 @@ def notes_root_holding(plan: LandedItemsPlan, root: Path) -> Path:
     manifest_path.parent.mkdir(parents=True)
     plan.manifest.write(manifest_path)
     (root / ProjectLocation.PLAN_BRANCH_INDEX).parent.mkdir(parents=True)
-    (root / ProjectLocation.PLAN_BRANCH_INDEX).write_text("")
+    (root / ProjectLocation.PLAN_BRANCH_INDEX).write_text("", encoding="utf-8")
     return manifest_path
 
 
@@ -270,9 +270,9 @@ def test_every_plan_regenerates_the_branch_index(plan: LandedItemsPlan, tmp_path
 
     MergedItemsInEveryPlan(source).apply(tmp_path)
 
-    assert (tmp_path / ProjectLocation.PLAN_BRANCH_INDEX).read_text() == (
-        f"{queued_branch}\t{plan.manifest.identifier}\n"
-    )
+    assert (tmp_path / ProjectLocation.PLAN_BRANCH_INDEX).read_text(
+        encoding="utf-8"
+    ) == (f"{queued_branch}\t{plan.manifest.identifier}\n")
 
 
 def test_every_plan_leaves_the_branch_index_alone_when_nothing_landed(
@@ -291,24 +291,24 @@ def test_every_plan_leaves_the_branch_index_alone_when_nothing_landed(
     )
     unlanded.write(manifest_path)
     index = tmp_path / ProjectLocation.PLAN_BRANCH_INDEX
-    index.write_text("some-branch\tsome-plan\n")
+    index.write_text("some-branch\tsome-plan\n", encoding="utf-8")
 
     MergedItemsInEveryPlan(RecordedPullRequestSource()).apply(tmp_path)
 
-    assert index.read_text() == "some-branch\tsome-plan\n"
+    assert index.read_text(encoding="utf-8") == "some-branch\tsome-plan\n"
 
 
 def test_every_plan_changes_nothing_when_a_pull_request_cannot_be_read(
     plan: LandedItemsPlan, tmp_path: Path
 ):
     manifest_path = notes_root_holding(plan, tmp_path)
-    written = manifest_path.read_text()
+    written = manifest_path.read_text(encoding="utf-8")
     failure = GitHubUnreachableError(HttpMethod.GET, "repos/owner/repo/pulls", "down")
 
     with pytest.raises(GitHubUnreachableError):
         MergedItemsInEveryPlan(UnreachablePullRequestSource(failure)).apply(tmp_path)
 
-    assert manifest_path.read_text() == written
+    assert manifest_path.read_text(encoding="utf-8") == written
 
 
 def test_every_plan_names_each_item_it_dropped(plan: LandedItemsPlan, tmp_path: Path):

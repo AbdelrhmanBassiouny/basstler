@@ -7,7 +7,6 @@ session works in is never switched or touched.
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -16,6 +15,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
+from basstler.directory_tree import DirectoryTree
 from basstler.exceptions import (
     NotesBranchMissingError,
     NotesPushRejectedError,
@@ -186,7 +186,7 @@ class ScratchWorktree:
         Remove the worktree, whether or not the write succeeded.
         """
         self.git.attempt("worktree", "remove", "--force", str(self.directory))
-        shutil.rmtree(self.directory, ignore_errors=True)
+        DirectoryTree(self.directory).remove()
 
 
 class NotesEdit(ABC):
@@ -227,13 +227,13 @@ class NotesFileChanges(NotesEdit):
         for path, content in self.changes.items():
             target = root / path
             if content is None and target.is_dir():
-                shutil.rmtree(target)
+                DirectoryTree(target).remove()
                 continue
             if content is None:
                 target.unlink(missing_ok=True)
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content)
+            target.write_text(content, encoding="utf-8")
 
 
 @dataclass(frozen=True)

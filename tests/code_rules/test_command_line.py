@@ -80,7 +80,7 @@ def test_verifying_a_stale_file_fails_without_writing_it(instructions):
     """
     Verifying reports a stale ``AGENTS.md`` and leaves it stale.
     """
-    instructions.path.write_text("stale")
+    instructions.path.write_text("stale", encoding="utf-8")
 
     assert generate_agents_instructions(verify=True) == (
         CodeRulesExitCode.CHANGES_NEEDED

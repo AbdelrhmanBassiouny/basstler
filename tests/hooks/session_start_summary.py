@@ -13,9 +13,12 @@ expected to carry from the same definitions the hook prints it from.
 
 from __future__ import annotations
 
+import os
+
 import subprocess
 from enum import StrEnum
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation
 
 from ..constants.paths import RepositoryLocation
@@ -381,17 +384,16 @@ def summary_message(message: SummaryMessage, *arguments: str) -> str:
     :return: The rendered line.
     """
     result = subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             'source "$1"; shift; "$@"',
             "_",
             str(MESSAGES_SCRIPT),
             message,
             *arguments,
-        ],
+        ),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     return result.stdout

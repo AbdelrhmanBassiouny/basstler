@@ -362,6 +362,6 @@ class SessionTranscript:
             chunk
             for path in self.files
             for chunk in HelperChunk.found_in(
-                request_identifier, path.read_text(errors="replace")
+                request_identifier, path.read_text(errors="replace", encoding="utf-8")
             )
         ]

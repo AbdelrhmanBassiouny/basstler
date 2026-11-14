@@ -702,7 +702,7 @@ def test_reports_a_session_start_hook_that_is_not_registered(
         check_setup_repository.plugin_root
         / PluginLocation.HOOKS.value.name
         / "hooks.json"
-    ).write_text("{}\n")
+    ).write_text("{}\n", encoding="utf-8")
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
@@ -731,7 +731,8 @@ def test_reports_declared_dependencies_that_are_not_installed(
     check_setup_repository: ScratchRepository,
 ):
     (check_setup_repository.checkout_root / PackageSourceFile.METADATA).write_text(
-        DatasetLocation.PARTLY_INSTALLED_PROJECT.read_text(),
+        DatasetLocation.PARTLY_INSTALLED_PROJECT.read_text(encoding="utf-8"),
+        encoding="utf-8",
     )
     installed, uninstalled = ProjectDeclaration.read(
         DatasetLocation.PARTLY_INSTALLED_PROJECT
@@ -756,7 +757,7 @@ def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
     not reported as an environment with nothing missing.
     """
     (check_setup_repository.checkout_root / PackageSourceFile.METADATA).write_text(
-        "this is not toml\n"
+        "this is not toml\n", encoding="utf-8"
     )
 
     report = run_check_setup(check_setup_repository)
@@ -777,7 +778,7 @@ def mark_an_install_in_progress(repository: ScratchRepository, process_id: int) 
     """
     marker = Path(repository.configuration_value(ConfigurationVariable.INSTALL_MARKER))
     marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(f"{process_id}\n")
+    marker.write_text(f"{process_id}\n", encoding="utf-8")
 
 
 def test_reports_dependencies_a_session_start_is_installing_as_in_progress(
@@ -920,7 +921,7 @@ def test_a_failing_unrequested_check_does_not_fail_the_requested_one(
 ):
     dispatch_needing_setup.write(
         ProjectLocation.PROJECT_STACK_CONFIGURATION,
-        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(),
+        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(encoding="utf-8"),
     )
 
     report = run_check_setup(

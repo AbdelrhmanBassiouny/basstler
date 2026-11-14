@@ -192,7 +192,9 @@ def test_a_link_sent_by_an_earlier_pass_is_listed_without_reading_its_descriptio
                 number=StackPullRequestNumber.CHILD,
                 head=StackBranch.CHILD,
                 labels=[GitHubLabel.PROMOTION_LINK_SENT],
-                body=DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text(),
+                body=DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text(
+                    encoding="utf-8"
+                ),
                 title=PromotionSampleText.TITLE,
             )
         ]
@@ -547,6 +549,6 @@ def test_a_whole_pass_writes_the_whole_report_to_its_file(
         maintenance, as_json=False, summaries=PromotionSummaries()
     )
 
-    assert json.loads(maintenance.full_report.read_text()) == json.loads(
-        report.as_json()
-    )
+    assert json.loads(
+        maintenance.full_report.read_text(encoding="utf-8")
+    ) == json.loads(report.as_json())

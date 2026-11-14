@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info(report)
     summary_path = GitHubActionsVariable.STEP_SUMMARY.read()
     if summary_path:
-        Path(summary_path).write_text(report)
+        Path(summary_path).write_text(report, encoding="utf-8")
     return 0
 
 

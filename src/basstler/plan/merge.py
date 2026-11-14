@@ -69,7 +69,7 @@ class PlanVersion:
         """
         texts = {
             document: (
-                (directory / document).read_text()
+                (directory / document).read_text(encoding="utf-8")
                 if (directory / document).is_file()
                 else None
             )
@@ -94,7 +94,7 @@ class PlanVersion:
         }
         for document, text in texts.items():
             if text is not None:
-                (directory / document).write_text(text)
+                (directory / document).write_text(text, encoding="utf-8")
 
     @cached_property
     def manifest_content(self) -> dict[str, Any]:

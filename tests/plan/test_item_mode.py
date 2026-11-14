@@ -117,7 +117,9 @@ def published_settings(repository: ScratchRepository, tmp_path: Path) -> dict[st
     """
     checkout = repository.clone_notes_branch(tmp_path / "published")
     return tomllib.loads(
-        (checkout / ProjectLocation.PERSONAL_PLAN_ITEM_MODES).read_text()
+        (checkout / ProjectLocation.PERSONAL_PLAN_ITEM_MODES).read_text(
+            encoding="utf-8"
+        )
     )
 
 
@@ -450,5 +452,7 @@ def test_every_skill_names_a_key_the_committed_defaults_define():
     The enum and the shipped TOML are edited in different files; this is what stops one
     gaining a skill the other has never heard of.
     """
-    defaults = tomllib.loads(PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value.read_text())
+    defaults = tomllib.loads(
+        PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value.read_text(encoding="utf-8")
+    )
     assert set(defaults) == {skill.setting_key for skill in PlanItemSkill}

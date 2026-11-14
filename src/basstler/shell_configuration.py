@@ -131,5 +131,5 @@ class ShellConfigurationFunction(StrEnum):
             ),
             cwd=project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         )

@@ -37,7 +37,9 @@ def remotes(tmp_path: Path) -> Path:
         site_url=SiteSampleText.SITE_URL.value,
     )
     plans = {
-        path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text()
+        path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text(
+            encoding="utf-8"
+        )
         for path in DatasetLocation.SITE_PLANS.value.rglob("*")
         if path.is_file()
     }
@@ -85,7 +87,7 @@ def test_the_site_publishes_the_hub_every_index_and_every_valid_plan(built_site:
 def test_the_hub_names_the_plan_and_the_repository_the_build_left_out(
     built_site: Path,
 ):
-    hub_page = (built_site / SiteFile.PAGE).read_text()
+    hub_page = (built_site / SiteFile.PAGE).read_text(encoding="utf-8")
     assert f"{SiteRepository.NOTES.value}/{SitePlan.BROKEN}" in hub_page
     assert str(SiteRepository.MISSING.value) in hub_page
 

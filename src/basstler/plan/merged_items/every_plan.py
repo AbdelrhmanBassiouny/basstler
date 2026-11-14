@@ -137,7 +137,8 @@ class MergedItemsInEveryPlan(NotesEdit):
         index = root / ProjectLocation.PLAN_BRANCH_INDEX
         index.parent.mkdir(parents=True, exist_ok=True)
         index.write_text(
-            BranchIndex(root, ProjectLocation.PLANS, PlanDocument.MANIFEST).render()
+            BranchIndex(root, ProjectLocation.PLANS, PlanDocument.MANIFEST).render(),
+            encoding="utf-8",
         )
 
     @staticmethod
@@ -160,7 +161,10 @@ class MergedItemsInEveryPlan(NotesEdit):
             )
             shutil.copyfile(destination.manifest, copy.manifest)
             copy.roadmap.write_text(
-                destination.roadmap.read_text() if destination.roadmap.exists() else ""
+                destination.roadmap.read_text(encoding="utf-8")
+                if destination.roadmap.exists()
+                else "",
+                encoding="utf-8",
             )
             copy.stage(destination)
 

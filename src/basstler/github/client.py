@@ -346,7 +346,7 @@ class GitHubRestClient(GitHubFullClient):
         if executable is None:
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
         login = subprocess.run(
-            [executable, "auth", "token"], capture_output=True, text=True
+            [executable, "auth", "token"], capture_output=True, encoding="utf-8"
         )
         if login.returncode != 0 or not login.stdout.strip():
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
