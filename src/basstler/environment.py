@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 
-from basstler.github.credential import CredentialOrigin
+from basstler.credential_origin import CredentialOrigin
 
 
 class EnvironmentFlag(StrEnum):

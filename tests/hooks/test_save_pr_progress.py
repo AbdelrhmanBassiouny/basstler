@@ -12,11 +12,11 @@ import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import PluginLocation, ProjectLocation
-from basstler.plan.size_limits import Measure
 from basstler.personal_notes.progress_notes import (
     NoGitHubCredentialError,
     ProgressNotesFile,
 )
+from basstler.plan.size_limits import Measure
 
 from ..constants.notes import ClaudeLocalSection, ProgressBranch, ScratchBranch
 from ..constants.paths import PersonalNotesPath

@@ -16,8 +16,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.setup.dependencies import PyprojectKey
 from basstler.locations import PackageLocation
+from basstler.setup.dependencies import PyprojectKey
 
 
 class ProjectTableKey(StrEnum):

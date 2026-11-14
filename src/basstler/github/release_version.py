@@ -15,14 +15,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.standard_streams import StandardStreamHandler
+from basstler.git.commands import GitCommandRunner
 from basstler.json_model import ValidatedJSONModel
 from basstler.locations import BasstlerRepositoryLocation
+from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

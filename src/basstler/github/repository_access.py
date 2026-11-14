@@ -17,26 +17,25 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from typing import Any
 
+from basstler.github.client import GitHubClient, GitHubRestClient
 from basstler.github.issue import IssueComment
 from basstler.github.label import LabelReplacement, NewLabel, RepositoryLabel
 from basstler.github.pull_request import PullRequestDescription
-from basstler.pull_request_state import PullRequestState
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import (
+from basstler.github.pull_request_models import CheckStatus
+from basstler.github.pull_request_record import (
     AccountField,
     CommitChecks,
     PullRequestRecord,
 )
-from basstler.github.client import GitHubClient, GitHubRestClient
-from basstler.repository import Repository
-from basstler.upstream_reviews.pull_request_models import CheckStatus
-from basstler.upstream_reviews.rest_models import (
+from basstler.github.pull_request_state import PullRequestState
+from basstler.github.repository import Repository
+from basstler.github.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
 )
 from basstler.github.states import CombinedCheckState
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.github.web_page import WebPage
-
 
 # %% what a pass reads and writes
 

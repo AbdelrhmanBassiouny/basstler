@@ -10,20 +10,18 @@ from typing import Annotated
 
 from pydantic import Field
 
-from basstler.upstream_reviews.pull_request_models import (
+from basstler.github.pull_request_models import (
     CheckResult,
 )
-from basstler.github.states import ConclusionOutcome
-from basstler.github.web_page import AbsentAsEmpty
-from basstler.upstream_reviews.review_models import (
+from basstler.github.review_models import (
     Author,
     BranchPullRequest,
     Review,
     ReviewThread,
     ThreadComment,
 )
-from basstler.github.states import PullRequestState, ReviewState
-from basstler.github.web_page import WebPage
+from basstler.github.states import ConclusionOutcome, PullRequestState, ReviewState
+from basstler.github.web_page import AbsentAsEmpty, WebPage
 from basstler.json_model import ValidatedJSONModel
 
 # %% models mirroring the REST data

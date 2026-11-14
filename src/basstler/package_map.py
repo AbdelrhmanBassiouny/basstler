@@ -5,11 +5,14 @@ each one ships.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from functools import cached_property
 from itertools import combinations
+from pathlib import Path
 
 import rustworkx
 
@@ -254,6 +257,22 @@ class PackageMap(Mapping[Distribution, DistributionDeclaration]):
         )
         return declaration if claim_length else None
 
+    @staticmethod
+    def declared_in(module_file: Path) -> PackageMap:
+        """
+        Load another copy of this module, such as one checked out at an earlier commit.
+
+        :param module_file: The copy's source file.
+        :return: The map the copy declares as :data:`PACKAGE_MAP`.
+        """
+        specification = importlib.util.spec_from_file_location(
+            f"{__name__}@{module_file.resolve()}", module_file
+        )
+        module = importlib.util.module_from_spec(specification)
+        sys.modules[specification.name] = module
+        specification.loader.exec_module(module)
+        return module.PACKAGE_MAP
+
 
 # %% this package's map
 
@@ -266,6 +285,7 @@ PACKAGE_MAP = PackageMap(
                 "bash",
                 "class_property",
                 "command_line",
+                "credential_origin",
                 "email_address",
                 "environment",
                 "exceptions",
@@ -283,12 +303,7 @@ PACKAGE_MAP = PackageMap(
         DistributionDeclaration(
             Distribution.GIT,
             Layer.LOCAL_TOOLS,
-            (
-                "branch",
-                "maintenance.git_commands",
-                "maintenance.remote_branch",
-                "stack.commit_move",
-            ),
+            ("git",),
             (Distribution.CORE,),
         ),
         DistributionDeclaration(
@@ -300,25 +315,7 @@ PACKAGE_MAP = PackageMap(
         DistributionDeclaration(
             Distribution.GITHUB,
             Layer.GITHUB,
-            (
-                "actions_budget",
-                "actions_usage",
-                "github",
-                "github_labels",
-                "main_failure",
-                "maintenance.constants",
-                "maintenance.description",
-                "maintenance.github",
-                "pull_request_source",
-                "pull_request_state",
-                "release_version",
-                "repository",
-                "repository_attachment",
-                "upstream_reviews.pull_request_models",
-                "upstream_reviews.rest_models",
-                "upstream_reviews.review_models",
-                "workflows",
-            ),
+            ("github",),
             (Distribution.CORE, Distribution.GIT),
         ),
         DistributionDeclaration(

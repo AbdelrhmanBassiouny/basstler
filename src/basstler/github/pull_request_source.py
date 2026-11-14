@@ -10,18 +10,24 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
-from basstler.maintenance.board import PullRequestField
 from basstler.github.client import (
     GitHubFullClient,
     GitHubResponse,
     GitHubRestClient,
 )
 from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import (
+    ForkLineage,
+    LivePullRequests,
+    PullRequestRecord,
+)
+from basstler.github.repository import PullRequestReference, Repository
+from basstler.github.repository_access import GitHubRepository
 from basstler.json_model import ValidatedJSONModel
-from basstler.maintenance.github import GitHubRepository
 from basstler.plan.dependencies import DependencyResolver
-from basstler.pull_request_state import ForkLineage, LivePullRequests, PullRequestRecord
-from basstler.repository import PullRequestReference, Repository
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

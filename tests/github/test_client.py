@@ -11,15 +11,11 @@ from http import HTTPStatus
 
 import pytest
 
+from basstler.credential_origin import CredentialOrigin
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubRestClient, HttpMethod, RetryPolicy
-from basstler.github.credential import (
-    CredentialOrigin,
-    CredentialProvider,
-    GitHubCredential,
-)
-from basstler.github.issue import IssueComment
-from basstler.github.label import LabelReplacement
+from basstler.github.constants import GitHubExecutable
+from basstler.github.credential import CredentialProvider, GitHubCredential
 from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubCredentialUnavailableError,
@@ -27,8 +23,9 @@ from basstler.github.exceptions import (
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
-from basstler.maintenance.constants import GitHubExecutable
-from basstler.repository import Repository
+from basstler.github.issue import IssueComment
+from basstler.github.label import LabelReplacement
+from basstler.github.repository import Repository
 
 from ..constants.environment import SearchPathVariable
 from .api_stand_in import (

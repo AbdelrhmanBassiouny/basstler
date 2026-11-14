@@ -10,10 +10,10 @@ import pytest
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure
-from basstler.github_labels import GitHubLabel
+from basstler.github.constants import MaintenanceText
+from basstler.github.pull_request_description import PullRequestDescription
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.maintenance.commands import RunReportCommand
-from basstler.maintenance.constants import MaintenanceText
-from basstler.maintenance.description import PullRequestDescription
 from basstler.maintenance.promotion import (
     PromotionSummaries,
     PromotionSummary,
@@ -26,15 +26,14 @@ from basstler.stack.promotion_link import PromotionLinkParameter
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch, StackLabel
 from ..stack.dataset import prefilled
-
 from .fork import (
-    StackPullRequestNumber,
+    ForkCheckout,
     PromotionSampleText,
+    StackPullRequestNumber,
+    a_parent_and_child,
+    a_stack,
     make_configuration,
     make_own_remote_configuration,
-    ForkCheckout,
-    a_stack,
-    a_parent_and_child,
     the_board,
 )
 from .recorded_fork import (

@@ -17,15 +17,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.branch import Branch
-from basstler.github_labels import GitHubLabel
-from basstler.repository import Repository
+from basstler.git.branch import Branch
+from basstler.github.repository import Repository
+from basstler.github.states import CombinedCheckState
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.stack.branch_status import BranchStatus
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BaseBranchScopeError, BoardUnavailable
 from basstler.stack.promotability import PromotionReadiness
 from basstler.stack.settings import Configuration
-from basstler.github.states import CombinedCheckState
 
 # %% domain model
 

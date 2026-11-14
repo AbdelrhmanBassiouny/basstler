@@ -18,13 +18,17 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField, PullRequestHead
-from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
-from basstler.maintenance.description import PullRequestDescription
-from basstler.repository import Repository
+from basstler.github.pull_request_description import PullRequestDescription
+from basstler.github.pull_request_record import (
+    PullRequestField,
+    PullRequestHead,
+)
+from basstler.github.pull_request_record import (
+    PullRequestRecord as PullRequestAPIRecord,
+)
+from basstler.github.repository import Repository
 from basstler.github.states import CombinedCheckState
-
+from basstler.github.tooling_labels import GitHubLabel
 
 # %% classified state
 

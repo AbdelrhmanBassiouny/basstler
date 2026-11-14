@@ -17,8 +17,8 @@ from basstler.exceptions import (
     DuplicateItemId,
     InvalidBlockers,
     InvalidDependsOn,
-    InvalidManifestRoot,
     InvalidLandedItemCount,
+    InvalidManifestRoot,
     InvalidSchemaVersion,
     MalformedDependencyReference,
     MissingPlanDirectory,
@@ -33,14 +33,13 @@ from basstler.exceptions import (
     UnknownWave,
     ValidationProblem,
 )
+from basstler.github.repository import Repository
 from basstler.plan.dependencies import (
     DependencyReference,
     PlanDirectory,
     ResolvedDependency,
 )
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.repository import Repository
-
 
 # %% dependency cycles
 

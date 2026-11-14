@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from basstler.github_labels import GitHubLabel
+from basstler.github.states import CombinedCheckState
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.maintenance.commands import RunReportCommand
 from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
@@ -35,11 +36,9 @@ from basstler.stack.model import (
     SkipReason,
     Stack,
 )
-from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch
-
 from .fork import (
     A_SESSION_LINK,
     UPSTREAM_BASE,

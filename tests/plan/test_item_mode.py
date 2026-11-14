@@ -18,20 +18,19 @@ from pathlib import Path
 import pytest
 
 import basstler.plan.item_mode
+from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 from basstler.plan.item_mode import (
     CommandLineOption,
     ExecutionMode,
-    PlanItemModeExitCode,
     MalformedModeSettingsError,
     ModeSetting,
     ModeSource,
+    PlanItemModeExitCode,
     PlanItemSkill,
     ReportKey,
     Subcommand,
     UnknownModeError,
 )
-
-from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 
 from ..scratch_repository import ScratchRepository
 from ..script_runner import PythonModuleRunner

@@ -15,9 +15,9 @@ from typing import Any
 
 import yaml
 
+from basstler.github.repository import Repository
 from basstler.plan.dependencies import DependencyReference
 from basstler.plan.model import ManifestKey, PlanDocument, PlanManifest
-from basstler.repository import Repository
 
 from .constants.paths import DatasetLocation
 

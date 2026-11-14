@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from basstler.repository import Repository
+from basstler.github.repository import Repository
+from basstler.json_model import JSONModel
 from basstler.upstream_reviews.action.exchange import (
     ActionAnswer,
 )
@@ -32,7 +33,6 @@ from basstler.upstream_reviews.readers import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.json_model import JSONModel
 
 # %% the recording
 

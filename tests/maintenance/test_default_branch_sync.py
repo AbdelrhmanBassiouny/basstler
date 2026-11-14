@@ -10,16 +10,18 @@ from __future__ import annotations
 
 import pytest
 
+from basstler.locations import PluginLocation
 from basstler.maintenance.default_branch_sync import (
     BaseOutcome,
     DefaultBranchReport,
     DefaultBranchSync,
 )
 from basstler.maintenance.fast_forward import FastForwardOutcome
-from basstler.locations import PluginLocation
 from basstler.shell_configuration import FetchedBranchReference
 
 from ..constants.notes import ScratchBranch
+from ..hooks.session_start_summary import SummaryLine, summary_value
+from ..scratch_repository import ScratchRepository
 from .forked_scratch_repository import (
     DEFAULT_BRANCH,
     FORK_REMOTE,
@@ -28,8 +30,6 @@ from .forked_scratch_repository import (
     UPSTREAM_REMOTE,
     ForkedScratchRepository,
 )
-from ..scratch_repository import ScratchRepository
-from ..hooks.session_start_summary import SummaryLine, summary_value
 
 
 @pytest.fixture

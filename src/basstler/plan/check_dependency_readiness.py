@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from basstler.plan_site.plan import Plan
+from basstler.github.pull_request_state import LivePullRequests
 from basstler.plan.dependencies import Dependency, DependencyResolver, PlanDirectory
-from basstler.pull_request_state import LivePullRequests
+from basstler.plan_site.plan import Plan
 
 
 class UnknownItemError(ValueError):

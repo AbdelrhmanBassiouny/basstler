@@ -15,13 +15,13 @@ from basstler.maintenance.promotion import PromotionSummary
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.plan import Item, Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
-from basstler.pull_request_state import (
+from basstler.github.pull_request_state import (
     ForkLineage,
     LivePullRequests,
     PullRequestRecord,
     PullRequestState,
 )
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 from basstler.stack.promotability import PromotionBlocker
 from basstler.stack.promotion_link import PromotionLink, PromotionTarget
 

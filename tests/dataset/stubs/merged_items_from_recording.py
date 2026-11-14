@@ -15,6 +15,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.github.pull_request_source import PullRequestSource
+from basstler.github.pull_request_state import PullRequestRecord
+from basstler.github.repository import PullRequestReference, Repository
+
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
 from basstler.plan.merged_items.every_plan import (
@@ -22,9 +26,6 @@ from basstler.plan.merged_items.every_plan import (
     MergedItemsInEveryPlan,
 )
 from basstler.plan.merged_items.plan_items import MergedItems, logger
-from basstler.pull_request_source import PullRequestSource
-from basstler.pull_request_state import PullRequestRecord
-from basstler.repository import PullRequestReference, Repository
 
 # %% recorded pull requests
 

@@ -10,15 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from basstler.branch import Branch
 from basstler.class_property import classproperty
-from basstler.json_model import JSONSerializable
-from basstler.maintenance.git_commands import (
+from basstler.git.branch import Branch
+from basstler.git.commands import (
     GitCommandResult,
     GitCommandRunner,
     ProposedPush,
 )
-from basstler.repository import Repository
+from basstler.github.repository import Repository
+from basstler.json_model import JSONSerializable
 
 # %% the branch
 

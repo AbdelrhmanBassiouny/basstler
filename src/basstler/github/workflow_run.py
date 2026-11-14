@@ -11,10 +11,10 @@ from pydantic import Field
 
 from basstler.class_property import classproperty
 from basstler.github.client import GitHubWrite, HttpMethod
-from basstler.locations import WorkflowLocation
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 from basstler.github.states import CheckOutcome, ConclusionOutcome
 from basstler.json_model import JSONModel, ValidatedJSONModel
+from basstler.locations import WorkflowLocation
 
 # %% a run
 

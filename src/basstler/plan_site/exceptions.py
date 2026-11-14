@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.git.commands import GitCommandFailed, GitCommandResult
 from basstler.github.credential import GitHubCommand
 from basstler.github.exceptions import GitHubCallFailed
-from basstler.maintenance.git_commands import GitCommandFailed, GitCommandResult
-from basstler.repository import GitHubAddress, Repository
+from basstler.github.repository import GitHubAddress, Repository
 
 if TYPE_CHECKING:
     from basstler.plan_site.site_read import SiteReadFix

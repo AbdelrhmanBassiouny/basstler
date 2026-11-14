@@ -14,8 +14,8 @@ from basstler.setup.exceptions import CheckSetupFailedError
 from basstler.setup.report import (
     CheckResult,
     CheckStatus,
-    RepositoryCheck,
     ReportRowField,
+    RepositoryCheck,
     SetupCheck,
     SetupReport,
 )

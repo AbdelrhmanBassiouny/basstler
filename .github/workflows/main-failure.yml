@@ -41,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -m basstler.main_failure record
+          python -m basstler.github.main_failure record
           --repository "${{ github.repository }}"
           --run "${{ github.event.workflow_run.id }}"
           --commit "${{ github.event.workflow_run.head_sha }}"

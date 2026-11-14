@@ -12,14 +12,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.maintenance.constants import GitHubExecutable
-from basstler.repository import Repository
-from basstler.upstream_reviews.exceptions import (
-    GitHubCommandFailed,
-)
-from basstler.upstream_reviews.pull_request_models import (
+from basstler.github.constants import GitHubExecutable
+from basstler.github.pull_request_models import (
     GraphQLRequest,
     GraphQLResponse,
+)
+from basstler.github.repository import Repository
+from basstler.upstream_reviews.exceptions import (
+    GitHubCommandFailed,
 )
 
 # %% client

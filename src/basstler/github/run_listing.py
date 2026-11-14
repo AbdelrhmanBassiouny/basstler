@@ -11,16 +11,16 @@ from urllib.parse import urlencode
 
 from pydantic import Field
 
-from basstler.locations import WorkflowLocation
-from basstler.repository import Repository
-from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
     GitHubReader,
 )
-from basstler.github.workflow_run import WorkflowRun
+from basstler.github.repository import Repository
 from basstler.github.states import CheckOutcome
 from basstler.github.web_page import WebPage
+from basstler.github.workflow_run import WorkflowRun
 from basstler.json_model import ValidatedJSONModel
+from basstler.locations import WorkflowLocation
+from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

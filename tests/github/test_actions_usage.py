@@ -6,20 +6,20 @@ with the daily ceilings the budget sets.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 
-from basstler.actions_budget import ActionsBudget, WorkflowLimits
-from basstler.actions_usage import (
+from basstler.github.actions_budget import ActionsBudget, WorkflowLimits
+from basstler.github.actions_usage import (
     UsageLevel,
     UsageReport,
     WorkflowCommand,
     WorkflowUsage,
 )
-from basstler.repository import Repository
 from basstler.github.client import GitHubReader
+from basstler.github.repository import Repository
 
 # %% a client that answers from a table
 

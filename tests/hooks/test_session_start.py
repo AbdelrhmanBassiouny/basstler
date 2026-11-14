@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 from basstler.document_references import CitedNames, ShippedModules
-from basstler.personal_notes import access
+from basstler.github.release_version import ReleaseVersion
 from basstler.locations import (
     BasstlerVariable,
     PackageLocation,
@@ -33,18 +33,17 @@ from basstler.locations import (
     ProjectLocation,
     WorkflowLocation,
 )
-from basstler.release_version import ReleaseVersion
-from basstler.setup.report import CheckStatus, SetupCheck
-from basstler.shell_configuration import ShellConfigurationFunction
-from basstler.upstream_reviews.action.branch import InstallationState
-from basstler.plan.model import PlanDocument
-from basstler.plan_site.hub import SiteAddress
+from basstler.personal_notes import access
+from basstler.plan.merged_items import __main__ as merged_items_command
 from basstler.plan.merged_items.every_plan import (
     MergedItemsCommand,
     MergedItemsSummary,
 )
-from basstler.plan.merged_items import __main__ as merged_items_command
-from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
+from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
+from basstler.plan_site.hub import SiteAddress
+from basstler.setup.report import CheckStatus, SetupCheck
+from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.upstream_reviews.action.branch import InstallationState
 
 from ..constants.environment import (
     ConfigurationVariable,
@@ -54,14 +53,14 @@ from ..constants.environment import (
     SearchPathVariable,
 )
 from ..constants.notes import ClaudeLocalSection, ScratchBranch
-from ..constants.site import SiteRepository
 from ..constants.paths import (
     DatasetLocation,
     PersonalNotesPath,
     RepositoryLocation,
 )
-from ..plan_dataset import LandedItemsPlan
+from ..constants.site import SiteRepository
 from ..executable_stubs import ExecutableStubDirectory, path_hiding_executables
+from ..plan_dataset import LandedItemsPlan
 from ..plugin_manifest import PluginManifest
 from ..project_declaration import ProjectDeclaration
 from ..scratch_repository import (

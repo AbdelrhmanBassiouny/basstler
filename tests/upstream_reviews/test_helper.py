@@ -19,6 +19,9 @@ from pathlib import Path
 import pytest
 
 import basstler.upstream_reviews.helper.fetch
+from basstler.github.rest_models import (
+    RestPullRequestSummary,
+)
 from basstler.locations import ClaudeCodeVariable
 from basstler.upstream_reviews.exceptions import (
     HelperOutputIncomplete,
@@ -48,11 +51,10 @@ from basstler.upstream_reviews.report import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.rest_models import (
-    RestPullRequestSummary,
-)
 
 from ..constants.paths import DatasetLocation
+from .replay import RecordedRestResponse as Recorded
+from .replay import ReplayingRestClient
 from .test_rest import (
     NUMBER,
     ROUTE,
@@ -61,8 +63,6 @@ from .test_rest import (
     make_reader,
     pull_request_responses,
 )
-from .replay import RecordedRestResponse as Recorded
-from .replay import ReplayingRestClient
 
 FAILED_JOB = 22
 """

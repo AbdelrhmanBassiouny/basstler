@@ -11,8 +11,8 @@ from typing import Annotated
 import pydantic
 import yaml
 
-from basstler.plan.exceptions import UnknownRepositoryRuleError
 from basstler.json_model import ValidatedJSONModel
+from basstler.plan.exceptions import UnknownRepositoryRuleError
 
 # %% rules
 

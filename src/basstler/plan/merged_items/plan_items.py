@@ -10,9 +10,9 @@ from functools import cached_property
 from pathlib import Path
 
 from basstler.exit_codes import CommandFailure, ExitCode, ManifestToolsExitCode
+from basstler.github.pull_request_source import PullRequestSource
+from basstler.github.repository import PullRequestReference
 from basstler.plan.model import ItemStatus, PlanItem, PlanManifest
-from basstler.pull_request_source import PullRequestSource
-from basstler.repository import PullRequestReference
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

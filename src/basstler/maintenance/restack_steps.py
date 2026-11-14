@@ -14,24 +14,26 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from basstler.maintenance.constants import (
-    CommitTrailer,
-    MergeableState,
-    MaintenanceText,
-)
-from basstler.maintenance.board import PullRequestField
-from basstler.maintenance.git_commands import (
+from basstler.git.commands import (
     GitCommandResult,
     GitCommandRunner,
     ProposedPush,
 )
-from basstler.maintenance.github import ForkPullRequests
-from basstler.stack.commit_move import (
+from basstler.git.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,
     RefusalReason,
 )
+from basstler.github.constants import (
+    CommitTrailer,
+    MaintenanceText,
+    MergeableState,
+)
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.repository_access import ForkPullRequests
 from basstler.stack.label_write import LabelWrite
 from basstler.stack.model import (
     IntegrationStrategy,

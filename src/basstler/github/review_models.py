@@ -6,7 +6,6 @@ them.
 from __future__ import annotations
 
 from enum import StrEnum
-
 from typing import Annotated, Any
 
 from pydantic import Field, model_validator
@@ -15,7 +14,6 @@ from basstler.class_property import classproperty
 from basstler.github.graphql import GraphQLConnection
 from basstler.github.states import PullRequestState, ReviewState
 from basstler.json_model import ValidatedJSONModel
-
 
 # %% the report's thread markers
 

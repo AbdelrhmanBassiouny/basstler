@@ -14,12 +14,11 @@ from pathlib import Path
 import yaml
 
 from basstler.class_property import classproperty
+from basstler.github.pull_request_state import LivePullRequests, LiveState
+from basstler.github.repository import PullRequestReference, Repository
+from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.plan_site.cards import DependencyChip
 from basstler.plan_site.plan import Item, Plan
-from basstler.plan.model import PlanDocument, PlanManifest
-from basstler.pull_request_state import LivePullRequests, LiveState
-from basstler.repository import PullRequestReference, Repository
-
 
 # %% references
 

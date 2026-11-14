@@ -1,6 +1,6 @@
 """
-Tests for :mod:`basstler.pull_request_state`: reading ``pr_data.json`` and classifying a
-pull request's live state.
+Tests for :mod:`basstler.github.pull_request_state`: reading ``pr_data.json`` and
+classifying a pull request's live state.
 """
 
 from __future__ import annotations
@@ -11,7 +11,16 @@ from http import HTTPStatus
 
 import pytest
 
-from basstler.pull_request_state import (
+from basstler.github.pull_request_description import (
+    PullRequestDescription,
+    UpstreamPullRequestLink,
+)
+from basstler.github.pull_request_record import (
+    AccountField,
+    PullRequestField,
+    PullRequestHeadKey,
+)
+from basstler.github.pull_request_state import (
     LivePullRequests,
     LiveState,
     MalformedPullRequestDataError,
@@ -19,24 +28,14 @@ from basstler.pull_request_state import (
     PullRequestRecord,
     PullRequestState,
 )
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import (
-    AccountField,
-    PullRequestField,
-    PullRequestHeadKey,
-)
-from basstler.maintenance.description import (
-    PullRequestDescription,
-    UpstreamPullRequestLink,
-)
-from basstler.repository import Repository
+from basstler.github.repository import Repository
+from basstler.github.tooling_labels import GitHubLabel
 
-from .constants.paths import DatasetLocation
-from .constants.site import SiteSampleText
-from .github.pull_request_api import api_pull_request, refusal
-from .plan_site.first_plan import MERGED_PULL_REQUEST, OPEN_PULL_REQUEST
-from .constants.stack import StackLabel
-
+from ..constants.paths import DatasetLocation
+from ..constants.site import SiteSampleText
+from ..constants.stack import StackLabel
+from ..github.pull_request_api import api_pull_request, refusal
+from ..plan_site.first_plan import MERGED_PULL_REQUEST, OPEN_PULL_REQUEST
 
 # %% item-status and live-state labels
 

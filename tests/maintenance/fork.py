@@ -10,39 +10,40 @@ from __future__ import annotations
 import dataclasses
 import shutil
 import subprocess
-from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 
-from basstler.repository import Repository
+import basstler.maintenance.__main__
+import basstler.maintenance.restack_procedure
+from basstler.git.commands import (
+    BranchAncestry,
+    GitCommandRunner,
+)
+from basstler.github.pull_request_record import (
+    CommitChecks,
+    PullRequestField,
+    PullRequestHeadKey,
+    PullRequestRecord,
+)
+from basstler.github.repository import Repository
+from basstler.github.states import CombinedCheckState
+from basstler.locations import ProjectLocation
+from basstler.maintenance.board import (
+    BoardExport,
+    UpstreamPullRequests,
+)
 from basstler.stack.model import (
     PullRequest,
     Stack,
 )
 from basstler.stack.settings import Configuration
-from basstler.github.states import CombinedCheckState
 
-import basstler.maintenance.__main__
-import basstler.maintenance.restack_procedure
-from basstler.locations import ProjectLocation
-from basstler.maintenance.board import (
-    BoardExport,
-    CommitChecks,
-    PullRequestField,
-    PullRequestHeadKey,
-    PullRequestRecord,
-    UpstreamPullRequests,
-)
-from basstler.maintenance.git_commands import (
-    BranchAncestry,
-    GitCommandRunner,
-)
-
-from ..scratch_repository import initialize_bare_repository
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
+from ..scratch_repository import initialize_bare_repository
 
 # %% shared maintenance inputs
 

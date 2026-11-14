@@ -4,10 +4,10 @@ Tests for :mod:`basstler.plan_site.plan_page`: the dependency chips on an item c
 
 from __future__ import annotations
 
+from basstler.github.pull_request_state import LivePullRequests
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.plan import Item, Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
-from basstler.pull_request_state import LivePullRequests
 
 from ..fixture_plans import (
     PLAN_UNDER_TEST_ID,

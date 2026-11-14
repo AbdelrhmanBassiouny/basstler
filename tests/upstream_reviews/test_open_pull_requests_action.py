@@ -8,25 +8,24 @@ import json
 
 import pytest
 
+from basstler.git.commands import GitCommandRunner
+from basstler.github.repository_access import GitHubRepository
 from basstler.locations import ClaudeCodeVariable
 from basstler.maintenance.board import UpstreamPullRequests
 from basstler.maintenance.commands import MaintenancePass
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.github import GitHubRepository
 from basstler.maintenance.upstream_action import (
     OpenPullRequestsAnswer,
     OpenPullRequestsRequest,
     UpstreamReadRoute,
 )
 from basstler.upstream_reviews.action.__main__ import ActionCommand, main
-from basstler.upstream_reviews.action.branch import ActionInstallation
+from basstler.upstream_reviews.action.branch import ActionFile, ActionInstallation
 from basstler.upstream_reviews.action.exchange import (
     ActionRequest,
     ActionRequestKind,
 )
 from basstler.upstream_reviews.action.read import ActionRead
 from basstler.upstream_reviews.exceptions import ActionNotInstalled
-from basstler.upstream_reviews.action.branch import ActionFile
 
 from ..maintenance.fork import (
     PullRequestHeadRepository,

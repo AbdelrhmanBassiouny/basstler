@@ -13,15 +13,17 @@ from typing import Any
 import pytest
 from playwright.sync_api import Locator, Page, Route, expect
 
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.plan_site.__main__ import PlanSource, RepositorySite, SiteFile
 from basstler.plan_site.cards import DraftRecheckAttribute, StartNowAction
 from basstler.plan_site.plan import Plan
-from basstler.maintenance.board import PullRequestField
-from basstler.plan_site.__main__ import PlanSource, RepositorySite, SiteFile
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
 
 from ..constants.site import SitePlan, SiteSampleText
-from ..recorded_pull_requests import RecordedPullRequestSource
 from ..github.pull_request_api import api_pull_request
+from ..recorded_pull_requests import RecordedPullRequestSource
 from .first_plan import OPEN_PULL_REQUEST
 from .test_build_site import NOTES_REPOSITORY, page_of
 

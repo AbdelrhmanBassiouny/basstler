@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from basstler.environment import GitHubActionsVariable
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 from basstler.stack.configuration import (
     CommittedStackConfiguration,
     MissingUpstreamRepositoryError,
