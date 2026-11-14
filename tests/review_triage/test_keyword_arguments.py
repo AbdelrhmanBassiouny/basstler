@@ -23,7 +23,7 @@ from basstler.review_triage.keyword_arguments import (
     KeywordArgumentComparison,
     KeywordChange,
 )
-from basstler.review_triage.python_source import ImportBindings
+from basstler.review_triage.python_source import ImportBindings, PythonSource
 from basstler.review_triage.renames import RenameMap
 from basstler.review_triage.tree_matching import TreeMatcher
 
@@ -104,3 +104,22 @@ def test_a_failed_attempt_keeps_no_findings():
     head = ast.parse("total(scale(value=1.0), 3.0)").body[0]
     matcher = TreeMatcher(KEYWORD_RULES, ImportBindings(frozenset()))
     assert (matcher.attempt(base, head), matcher.findings) == (False, [])
+
+
+@pytest.mark.parametrize(
+    ("function", "types"),
+    [
+        (
+            "def f(shape: Shape, size: int | None, other): pass",
+            {"shape": "Shape", "size": "int"},
+        ),
+        ("def f(shape: Shape):\n    shape = make()", {}),
+        ("def f(items: list[Shape], maybe: Optional[Shape]): pass", {"maybe": "Shape"}),
+    ],
+)
+def test_only_parameters_kept_as_annotated_have_a_class(function: str, types: dict):
+    """
+    A parameter has a class when its annotation allows one, ``None`` aside, and the
+    function never assigns to it.
+    """
+    assert PythonSource.annotated_parameters(ast.parse(function).body[0]) == types

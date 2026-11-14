@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from basstler.class_property import classproperty
+from basstler.review_triage.calls import CallScope
 from basstler.review_triage.comparison import ChangeKind
 from basstler.review_triage.python_source import ImportBindings
 from basstler.review_triage.renames import RenameMap
@@ -103,6 +104,12 @@ class TreeMatcher:
     The names of the classes whose bodies are being compared, innermost last.
     """
 
+    parameter_types: list[dict[str, str]] = field(default_factory=list)
+    """
+    For each function whose body is being compared, innermost last, the class each
+    parameter it never assigns to is annotated with.
+    """
+
     @cached_property
     def rule_by_type(self) -> dict[type[ast.AST], DifferenceRule]:
         """
@@ -114,11 +121,14 @@ class TreeMatcher:
         return rules
 
     @property
-    def enclosing_class(self) -> str | None:
+    def scope(self) -> CallScope:
         """
-        The name of the innermost class whose body is being compared.
+        What the code around the nodes being compared tells about the names they use.
         """
-        return self.enclosing_classes[-1] if self.enclosing_classes else None
+        return CallScope(
+            self.enclosing_classes[-1] if self.enclosing_classes else None,
+            self.parameter_types[-1] if self.parameter_types else {},
+        )
 
     def matches(self, base: object, head: object) -> bool:
         """

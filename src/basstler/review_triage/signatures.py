@@ -223,6 +223,24 @@ class SignatureReader:
             return self.class_signature(definition)
         return self.signature_of(method)
 
+    def attribute_class(self, class_name: str, attribute: str) -> str | None:
+        """
+        :param class_name: The name of a class.
+        :param attribute: The name of an attribute of its instances.
+        :return: The class every declaration of the attribute in the class and its
+            ancestors allows, ``None`` when there is none or they disagree.
+        """
+        classes = list(self.definitions.classes_named(class_name))
+        declared = {
+            declaration.class_name
+            for definition in [*classes, *self.definitions.ancestors_of(classes)]
+            for declaration in definition.attribute_types
+            if declaration.name == attribute
+        }
+        if len(declared) != 1:
+            return None
+        return declared.pop()
+
     @staticmethod
     def defines(definition: ClassDefinition, name: str) -> bool:
         """

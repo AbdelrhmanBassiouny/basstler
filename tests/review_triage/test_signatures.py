@@ -6,7 +6,12 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.review_triage.calls import InstanceMethod, NamedCallee, OwnClass
+from basstler.review_triage.calls import (
+    AttributeMethodTarget,
+    ClassTarget,
+    MethodTarget,
+    NamedTarget,
+)
 from basstler.review_triage.definitions import DefinitionIndex, SourceDefinitions
 from basstler.review_triage.keyword_arguments import KeywordConversion
 from basstler.review_triage.renames import RenameMap
@@ -53,24 +58,37 @@ def test_the_positional_parameters_are_read_from_the_definition(
 @pytest.mark.parametrize(
     ("conversion", "binds"),
     [
-        (KeywordConversion("Derived", 1, ("label",), NamedCallee(), None), True),
+        (KeywordConversion(NamedTarget("Derived"), 1, ("label",)), True),
+        (KeywordConversion(NamedTarget("Derived"), 0, ("label", "identifier")), False),
+        (KeywordConversion(NamedTarget("Plain"), 0, ("first", "second")), False),
+        (KeywordConversion(NamedTarget("gather"), 0, ("items",)), False),
+        (KeywordConversion(NamedTarget("read"), 0, ("path",)), False),
+        (KeywordConversion(MethodTarget("read", "FastReader"), 0, ("path",)), True),
+        (KeywordConversion(ClassTarget("Derived"), 1, ("label",)), True),
         (
             KeywordConversion(
-                "Derived", 0, ("label", "identifier"), NamedCallee(), None
+                AttributeMethodTarget("read", "Library", "reader"), 0, ("path",)
+            ),
+            True,
+        ),
+        (
+            KeywordConversion(
+                AttributeMethodTarget("read", "Library", "fallback"), 0, ("path",)
+            ),
+            True,
+        ),
+        (
+            KeywordConversion(
+                AttributeMethodTarget("read", "Library", "parser"), 0, ("text",)
+            ),
+            True,
+        ),
+        (
+            KeywordConversion(
+                AttributeMethodTarget("read", "Library", "undeclared"), 0, ("path",)
             ),
             False,
         ),
-        (
-            KeywordConversion("Plain", 0, ("first", "second"), NamedCallee(), None),
-            False,
-        ),
-        (KeywordConversion("gather", 0, ("items",), NamedCallee(), None), False),
-        (KeywordConversion("read", 0, ("path",), NamedCallee(), None), False),
-        (
-            KeywordConversion("read", 0, ("path",), InstanceMethod(), "FastReader"),
-            True,
-        ),
-        (KeywordConversion("cls", 1, ("label",), OwnClass(), "Derived"), True),
     ],
 )
 def test_a_keyword_binds_only_where_the_parameter_takes_it(
@@ -78,6 +96,7 @@ def test_a_keyword_binds_only_where_the_parameter_takes_it(
 ):
     """
     A keyword binds as before only when it names the parameter at its position in every
-    definition the call may reach: by name anywhere, or through the class hierarchy.
+    definition the call may reach: by name anywhere, through the class hierarchy, or
+    through the class an attribute is declared to hold, by name where none is declared.
     """
     assert conversion.holds(reader, RenameMap()) is binds

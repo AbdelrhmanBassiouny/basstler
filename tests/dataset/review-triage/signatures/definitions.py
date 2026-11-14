@@ -53,3 +53,14 @@ class FastReader(Reader):
 class Parser:
     def read(self, text: str, strict: bool) -> str:
         return text
+
+
+class Library:
+    reader: Reader | None
+
+    def __init__(self, parser: Parser) -> None:
+        self.parser: Parser = parser
+
+    @property
+    def fallback(self) -> FastReader:
+        return FastReader()

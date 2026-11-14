@@ -28,3 +28,7 @@ class Square(Shape):
 
     def corner(self) -> Point:
         return self.moved(offset=Point(x=self.side, y=self.side))
+
+
+def offset_corner(shape: Shape, by: Point) -> Point:
+    return shape.moved(offset=by)

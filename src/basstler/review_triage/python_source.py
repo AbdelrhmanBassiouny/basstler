@@ -26,6 +26,11 @@ The fields of a syntax tree node that hold an identifier, or a list of them, whe
 the node type has such a field.
 """
 
+OPTIONAL = "Optional"
+"""
+The typing name of a value that may also be ``None``.
+"""
+
 FUTURE_MODULE = "__future__"
 """
 The module whose imports change how the rest of the file is compiled.
@@ -340,6 +345,61 @@ class PythonSource:
         if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
             return expression.value.split("[")[0].split(".")[-1].strip()
         return None
+
+    @staticmethod
+    def annotated_class(annotation: ast.expr) -> str | None:
+        """
+        :param annotation: A type annotation.
+        :return: The name of the one class it allows, ``None`` aside, ``None`` when it
+            allows none or several or names a generic container.
+        """
+        if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+            sides = [
+                side
+                for side in (annotation.left, annotation.right)
+                if not (isinstance(side, ast.Constant) and side.value is None)
+            ]
+            return PythonSource.annotated_class(sides[0]) if len(sides) == 1 else None
+        if isinstance(annotation, ast.Subscript):
+            if PythonSource.referenced_name(annotation.value) != OPTIONAL:
+                return None
+            return PythonSource.annotated_class(annotation.slice)
+        if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+            return PythonSource.annotated_class(
+                ast.parse(annotation.value, mode="eval").body
+            )
+        if isinstance(annotation, (ast.Name, ast.Attribute)):
+            return PythonSource.referenced_name(annotation)
+        return None
+
+    @staticmethod
+    def annotated_parameters(
+        function: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> dict[str, str]:
+        """
+        :param function: A function definition.
+        :return: The class each parameter is annotated with, for the parameters the
+            function's body never assigns to or deletes.
+        """
+        arguments = function.args
+        parameters = [
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+        ]
+        assigned = {
+            node.id
+            for statement in function.body
+            for node in ast.walk(statement)
+            if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load)
+        }
+        return {
+            parameter.arg: annotated
+            for parameter in parameters
+            if parameter.annotation is not None
+            and parameter.arg not in assigned
+            and (annotated := PythonSource.annotated_class(parameter.annotation))
+        }
 
     @staticmethod
     def is_identifier(token: tokenize.TokenInfo) -> bool:

@@ -10,7 +10,11 @@ import ast
 from dataclasses import dataclass
 
 from basstler.class_property import classproperty
-from basstler.review_triage.calls import CALLEE_RESOLUTIONS, CalleeResolution
+from basstler.review_triage.calls import (
+    CALLEE_RESOLUTIONS,
+    CalleeResolution,
+    CallTarget,
+)
 from basstler.review_triage.comparison import (
     ChangeKind,
     ChangeKinds,
@@ -58,9 +62,9 @@ class KeywordConversion(Finding):
     A call whose trailing positional arguments the head commit passes by keyword.
     """
 
-    callee: str
+    target: CallTarget
     """
-    The last name of the called expression, the one its definitions are found by.
+    What the call reaches its callee through.
     """
 
     first_position: int
@@ -73,16 +77,6 @@ class KeywordConversion(Finding):
     The keywords of the arguments from that position on, in order.
     """
 
-    resolution: CalleeResolution
-    """
-    How the call reaches its callee.
-    """
-
-    enclosing_class: str | None
-    """
-    The name of the class whose body holds the call, ``None`` outside a class.
-    """
-
     @classproperty
     def kind(cls) -> ChangeKind:
         return KeywordChange.KEYWORD_ARGUMENTS
@@ -92,11 +86,7 @@ class KeywordConversion(Finding):
         Every definition the call may reach that takes its positional arguments binds
         each to the parameter of its keyword, and at least one takes them.
         """
-        signatures = self.resolution.reachable_signatures(
-            renames.original_identifier(self.callee),
-            self.enclosing_class and renames.original_identifier(self.enclosing_class),
-            reader,
-        )
+        signatures = self.target.in_base(renames).reachable_signatures(reader)
         if None in signatures:
             return False
         keywords = tuple(map(renames.original_identifier, self.keywords))
@@ -110,7 +100,7 @@ class KeywordConversion(Finding):
         )
 
     def looked_up_names(self, renames: RenameMap) -> frozenset[str]:
-        return self.resolution.looked_up_names(renames.original_identifier(self.callee))
+        return self.target.in_base(renames).looked_up_names()
 
 
 @dataclass(frozen=True)
@@ -170,7 +160,7 @@ class ArgumentsPassedByKeyword(DifferenceRule):
 
     resolutions: tuple[CalleeResolution, ...] = CALLEE_RESOLUTIONS
     """
-    The ways a call may reach its callee, the first recognising it deciding it.
+    The ways a call may reach its callee, the first giving it a target deciding it.
     """
 
     @classproperty
@@ -190,9 +180,17 @@ class ArgumentsPassedByKeyword(DifferenceRule):
             return False
         if not moved:
             return True
-        callee = PythonSource.referenced_name(head.func)
+        scope = matcher.scope
+        target = next(
+            (
+                found
+                for resolution in self.resolutions
+                if (found := resolution.target(head.func, scope)) is not None
+            ),
+            None,
+        )
         if (
-            callee is None
+            target is None
             or any(isinstance(argument, ast.Starred) for argument in base.args)
             or any(keyword.arg is None for keyword in new_keywords)
             or not matcher.matches(moved, [keyword.value for keyword in new_keywords])
@@ -200,15 +198,7 @@ class ArgumentsPassedByKeyword(DifferenceRule):
             return False
         matcher.record(
             KeywordConversion(
-                callee,
-                kept,
-                tuple(keyword.arg for keyword in new_keywords),
-                next(
-                    resolution
-                    for resolution in self.resolutions
-                    if resolution.recognises(head.func)
-                ),
-                matcher.enclosing_class,
+                target, kept, tuple(keyword.arg for keyword in new_keywords)
             )
         )
         return True
@@ -272,12 +262,18 @@ class DefinitionDecorators(DifferenceRule):
         head: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
         matcher: TreeMatcher,
     ) -> bool:
-        is_class = isinstance(base, ast.ClassDef)
-        if is_class:
-            matcher.enclosing_classes.append(base.name)
+        scopes = (
+            matcher.enclosing_classes
+            if isinstance(base, ast.ClassDef)
+            else matcher.parameter_types
+        )
+        scopes.append(
+            base.name
+            if isinstance(base, ast.ClassDef)
+            else PythonSource.annotated_parameters(base)
+        )
         fields_match = matcher.matches_fields(base, head, frozenset({"decorator_list"}))
-        if is_class:
-            matcher.enclosing_classes.pop()
+        scopes.pop()
         return fields_match and self.matches_decorators(base, head, matcher)
 
     def matches_decorators(

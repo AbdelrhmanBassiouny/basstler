@@ -57,6 +57,35 @@ class DataclassName(StrEnum):
     """
 
 
+PROPERTY_DECORATORS = frozenset({"property", "cached_property"})
+"""
+The decorators that make a method an attribute holding what it returns.
+"""
+
+# %% the conventional receiver names
+
+
+class ReceiverName(StrEnum):
+    """
+    The names a method's code conventionally refers to what it is called on by.
+    """
+
+    INSTANCE = "self"
+    """
+    The instance an instance method is called on.
+    """
+
+    CLASS = "cls"
+    """
+    The class a class method is called on.
+    """
+
+    PARENT = "super"
+    """
+    The function giving access to the methods a class inherits.
+    """
+
+
 # %% the records
 
 
@@ -122,6 +151,24 @@ class DataclassField:
 
 
 @dataclass(frozen=True, slots=True)
+class AttributeType:
+    """
+    The class an attribute of a class's instances is declared to hold.
+    """
+
+    name: str
+    """
+    The attribute's name.
+    """
+
+    class_name: str | None
+    """
+    The name of the one class its annotation allows, ``None`` when it allows none or
+    several.
+    """
+
+
+@dataclass(frozen=True, slots=True)
 class ClassDefinition:
     """
     A class, as far as a call of it or of its methods depends on it.
@@ -164,6 +211,12 @@ class ClassDefinition:
     is_dataclass: bool
     """
     Whether the standard dataclass decorator generates its initializer.
+    """
+
+    attribute_types: tuple[AttributeType, ...]
+    """
+    The attributes it declares a class for: in its body, on ``self`` in its methods
+    or as the return of its properties.
     """
 
     def method(self, name: str) -> FunctionDefinition | None:
@@ -273,7 +326,45 @@ class DefinitionReader:
                 () if decorator is None else self.dataclass_fields(node, decorator)
             ),
             is_dataclass=decorator is not None,
+            attribute_types=tuple(self.attribute_types(node)),
         )
+
+    @staticmethod
+    def attribute_types(node: ast.ClassDef) -> Iterator[AttributeType]:
+        """
+        :param node: A class definition.
+        :return: Every attribute declaration of the class, with the class it allows.
+        """
+        for statement in node.body:
+            if isinstance(statement, ast.AnnAssign) and isinstance(
+                statement.target, ast.Name
+            ):
+                yield AttributeType(
+                    statement.target.id,
+                    PythonSource.annotated_class(statement.annotation),
+                )
+            if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if PROPERTY_DECORATORS & {
+                PythonSource.referenced_name(decorator)
+                for decorator in statement.decorator_list
+            }:
+                yield AttributeType(
+                    statement.name,
+                    statement.returns
+                    and PythonSource.annotated_class(statement.returns),
+                )
+            for assignment in ast.walk(statement):
+                if (
+                    isinstance(assignment, ast.AnnAssign)
+                    and isinstance(assignment.target, ast.Attribute)
+                    and isinstance(assignment.target.value, ast.Name)
+                    and assignment.target.value.id == ReceiverName.INSTANCE
+                ):
+                    yield AttributeType(
+                        assignment.target.attr,
+                        PythonSource.annotated_class(assignment.annotation),
+                    )
 
     def dataclass_decorator(self, node: ast.ClassDef) -> ast.expr | None:
         """
