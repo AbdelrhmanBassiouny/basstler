@@ -36,8 +36,10 @@ is left.
 - **Whose files:** it marks them viewed for the token's owner, one account per
   repository. Everyone who can push to the repository can read its secrets through a
   workflow, so give the token the least it needs and an expiry.
-- **Changing it:** where the default branch is protected, the command prints the
-  workflow to add through a pull request instead of committing it.
+- **Changing it:** on a repository that is no fork, the command never commits to the
+  default branch. It opens a pull request adding the workflow from its own branch,
+  `basstler/mark-viewed`, for you to review and merge. Where it may not push, it gives
+  you GitHub's new-file page with the workflow already filled in.
 
 The run uses `pull_request_target`, so pull requests from forks are marked too. It reads
 their commits but runs none of their code.
@@ -108,8 +110,9 @@ It then lists the steps only you can take, with links that fill the forms in:
 
    Keep it in your fork where you have one: everyone who can push to a repository can
    read its secrets through a workflow.
-3. **Add the workflow through a pull request** if the repository is no fork. The
-   command then prints the file to add.
+3. **Merge the pull request adding the workflow** if the repository is no fork. The
+   command opens it, or, where it may not push, links GitHub's new-file page with the
+   workflow filled in.
 
 Run `set-up-mark-viewed` again afterwards: it checks every step and says when nothing
 is left. `--workflow-repository` names another repository than the checkout's `origin`,

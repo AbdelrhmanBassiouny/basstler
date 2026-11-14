@@ -19,6 +19,12 @@ from basstler.github.client import (
     HttpMethod,
     RepositoryWrite,
 )
+from basstler.github.file_proposal import (
+    FileProposal,
+    FileUpdate,
+    FileWrite,
+    RepositoryFile,
+)
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.token_form import (
     FineGrainedTokenForm,
@@ -31,76 +37,9 @@ from basstler.render_common import TemplatePage
 from basstler.repository import BASSTLER_REPOSITORY, Repository
 from basstler.review_triage.exceptions import MarkViewedWorkflowRefused
 from basstler.review_triage.viewed_request import ReviewTriageSecret
+from basstler.workflows import Workflow
 
 # %% the REST resources the setup reads and writes
-
-
-class FileWrite(RepositoryWrite):
-    """
-    Creates one file on a branch of a repository, as one commit.
-    """
-
-    file: Annotated[str, Field(exclude=True)]
-    """
-    The file's path from the repository's root.
-    """
-
-    message: str
-    """
-    The commit's message.
-    """
-
-    content: str
-    """
-    The file's content, base64-encoded as the API takes it.
-    """
-
-    branch: str
-    """
-    The branch the commit is made on.
-    """
-
-    @classproperty
-    def method(cls) -> HttpMethod:
-        return HttpMethod.PUT
-
-    @property
-    def path(self) -> str:
-        return f"{self.repository.api_path}/contents/{self.file}"
-
-
-class FileUpdate(FileWrite):
-    """
-    Replaces one file on a branch of a repository, as one commit.
-    """
-
-    sha: str
-    """
-    The blob the file holds now, which the API requires to replace it.
-    """
-
-
-class RepositoryFile(ValidatedJSONModel):
-    """
-    One file of a repository, as the contents API returns it.
-    """
-
-    sha: str
-    """
-    The blob the file holds.
-    """
-
-    content: str
-    """
-    The file's content, base64-encoded with line breaks.
-    """
-
-    @property
-    def text(self) -> str:
-        """
-        The file's content, decoded.
-        """
-        return base64.b64decode(self.content).decode()
 
 
 class ActionsPermissions(ValidatedJSONModel):
@@ -195,7 +134,19 @@ class SetupState(StrEnum):
     DONE = "done now"
     ALREADY_DONE = "already in place"
     REFUSED = "could not be done"
+    UNREADABLE = "could not be read"
     LEFT_TO_USER = "left to you"
+
+
+class ProposalBranch(StrEnum):
+    """
+    The branches the setup proposes files on, for a repository that is no fork.
+    """
+
+    MARK_VIEWED = "basstler/mark-viewed"
+    """
+    Carries the caller workflow until a reviewer merges it.
+    """
 
 
 @dataclass(frozen=True)
@@ -301,13 +252,28 @@ class MarkViewedSetup(TemplatePage):
         return (
             self.render_named_template(
                 ReviewTriageLocation.MARK_VIEWED_CALLER_TEMPLATE.name,
-                basstler_repository=BASSTLER_REPOSITORY.full_name,
-                reusable_workflow=WorkflowLocation.REVIEW_TRIAGE_MARK_VIEWED.as_posix(),
+                reusable_workflow=self.reusable_workflow,
                 branch_or_tag=self.branch_or_tag,
                 token_secret=ReviewTriageSecret.VIEWER_TOKEN,
                 every_pull_request=self.on_every_pull_request,
             )
             + "\n"
+        )
+
+    @property
+    def reusable_workflow(self) -> str:
+        """
+        How the caller workflow names basstler's reusable workflow: as its own file on
+        basstler's repository, whose budget counts only such jobs.
+        """
+        if self.workflow_repository == BASSTLER_REPOSITORY:
+            return (
+                f"{Workflow.local_reference_prefix}"
+                f"{WorkflowLocation.REVIEW_TRIAGE_MARK_VIEWED.name}"
+            )
+        return (
+            f"{BASSTLER_REPOSITORY.full_name}/"
+            f"{WorkflowLocation.REVIEW_TRIAGE_MARK_VIEWED.as_posix()}@{self.branch_or_tag}"
         )
 
     def run(self, client: GitHubAttemptClient) -> str:
@@ -372,13 +338,7 @@ class MarkViewedSetup(TemplatePage):
             self.steps.append(SetupStep(description, SetupState.ALREADY_DONE))
             return True
         if not details.is_fork:
-            self.leave_installation(
-                description,
-                f"{self.workflow_repository.full_name} is no fork, so its default "
-                "branch changes only through a reviewed pull request",
-                details,
-                replacing=installed is not None,
-            )
+            self.propose_installation(client, description, details, installed)
             return installed is not None
         commit = {
             "repository": self.workflow_repository,
@@ -395,46 +355,113 @@ class MarkViewedSetup(TemplatePage):
         )
         if written.failure is not None:
             self.leave_installation(
-                description,
-                written.failure.error_message(),
-                details,
-                replacing=installed is not None,
+                description, written.failure.error_message(), details, installed
             )
             return False
         self.steps.append(SetupStep(description, SetupState.DONE))
         return True
+
+    def workflow_proposal(self, details: RepositoryDetails) -> FileProposal:
+        """
+        :param details: The workflow repository.
+        :return: The caller workflow, proposed for the default branch.
+        """
+        return FileProposal(
+            repository=self.workflow_repository,
+            base=details.default_branch,
+            branch=ProposalBranch.MARK_VIEWED,
+            file=WorkflowLocation.MARK_VIEWED.as_posix(),
+            text=self.caller_workflow,
+            title="Mark pull requests' mechanical files viewed from Actions",
+            body=f"Installed by `basstler review-triage set-up-mark-viewed` "
+            f"({self.branch_or_tag}). Merging it lets the workflow mark files viewed "
+            f"for the owner of the token stored as `{ReviewTriageSecret.VIEWER_TOKEN}`.",
+        )
+
+    def propose_installation(
+        self,
+        client: GitHubAttemptClient,
+        description: str,
+        details: RepositoryDetails,
+        installed: RepositoryFile | None,
+    ) -> None:
+        """
+        Open a pull request adding the caller workflow to a repository that is no
+        fork, leaving its merge to the user.
+
+        :param client: Reads and writes the workflow repository.
+        :param description: What installing sets up.
+        :param details: The workflow repository.
+        :param installed: The version of the workflow on the default branch, ``None``
+            when there is none.
+        """
+        outcome = self.workflow_proposal(details).propose(client)
+        if outcome.pull_request is None:
+            self.leave_installation(
+                description,
+                f"no pull request adding it could be opened: {outcome.failure}",
+                details,
+                installed,
+            )
+            return
+        url = outcome.pull_request.page_url
+        found = "opened" if outcome.opened_now else "already open"
+        self.steps.append(
+            SetupStep(
+                description,
+                SetupState.LEFT_TO_USER,
+                f"pull request {url} adds it ({found}); merging it finishes this step",
+            )
+        )
+        self.user_steps.append(
+            UserStep(
+                f"merge the pull request adding {WorkflowLocation.MARK_VIEWED.name}",
+                (f"Open {url}.", "Review it, then merge it."),
+            )
+        )
 
     def leave_installation(
         self,
         description: str,
         reason: str,
         details: RepositoryDetails,
-        replacing: bool,
+        installed: RepositoryFile | None,
     ) -> None:
         """
-        Record the workflow's installation as left to the user, with the file to write.
+        Record the workflow's installation as left to the user, with a page that adds
+        it, filled in, or, where another version is there, the file to paste.
 
         :param description: What installing sets up.
         :param reason: Why it is left to the user.
         :param details: The workflow repository.
-        :param replacing: Whether another version of the file is there already.
+        :param installed: The version of the workflow on the default branch, ``None``
+            when there is none.
         """
         self.steps.append(SetupStep(description, SetupState.LEFT_TO_USER, reason))
         location = WorkflowLocation.MARK_VIEWED.as_posix()
         branch = details.default_branch
-        page = (
-            f"{self.workflow_repository.url}/edit/{branch}/{location}"
-            if replacing
-            else f"{self.workflow_repository.url}/new/{branch}?filename={location}"
-        )
+        target = f"{location} on {self.workflow_repository.full_name}'s {branch}"
+        if installed is None:
+            self.user_steps.append(
+                UserStep(
+                    f"add {target}",
+                    (
+                        f"Open {self.workflow_proposal(details).new_file_page} - the "
+                        "file's path and content are filled in.",
+                        "Click Commit changes; where the branch is protected, choose "
+                        "to create a new branch and start a pull request.",
+                    ),
+                )
+            )
+            return
         self.user_steps.append(
             UserStep(
-                f"{'replace' if replacing else 'add'} {location} on "
-                f"{self.workflow_repository.full_name}'s {branch}",
+                f"replace {target}",
                 (
-                    f"Open {page}.",
+                    f"Open {self.workflow_repository.url}/edit/{branch}/{location}.",
                     "Paste the workflow below as its whole content.",
-                    "Commit it, through a pull request where the branch is protected.",
+                    "Click Commit changes; where the branch is protected, choose to "
+                    "create a new branch and start a pull request.",
                 ),
                 text=self.caller_workflow,
             )
@@ -458,9 +485,8 @@ class MarkViewedSetup(TemplatePage):
             self.steps.append(
                 SetupStep(
                     description,
-                    SetupState.REFUSED,
-                    "whether they are on could not be read: "
-                    f"{permissions.failure.error_message()}",
+                    SetupState.UNREADABLE,
+                    permissions.failure.error_message(),
                 )
             )
             self.user_steps.append(self.actions_step(checked=False))
@@ -517,7 +543,7 @@ class MarkViewedSetup(TemplatePage):
         if listed.failure is not None:
             self.steps.append(
                 SetupStep(
-                    description, SetupState.REFUSED, listed.failure.error_message()
+                    description, SetupState.UNREADABLE, listed.failure.error_message()
                 )
             )
             return
@@ -564,13 +590,13 @@ class MarkViewedSetup(TemplatePage):
         if stored.failure is None:
             self.steps.append(SetupStep(description, SetupState.ALREADY_DONE))
             return
-        reason = (
-            "only you can create the token"
+        self.steps.append(
+            SetupStep(description, SetupState.LEFT_TO_USER, "only you can create it")
             if stored.is_not_found
-            else f"whether it is stored could not be read: "
-            f"{stored.failure.error_message()}"
+            else SetupStep(
+                description, SetupState.UNREADABLE, stored.failure.error_message()
+            )
         )
-        self.steps.append(SetupStep(description, SetupState.LEFT_TO_USER, reason))
         self.user_steps.extend(self.token_steps(details))
 
     def token_steps(self, details: RepositoryDetails) -> tuple[UserStep, UserStep]:

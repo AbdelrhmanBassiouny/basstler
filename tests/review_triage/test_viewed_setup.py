@@ -17,6 +17,8 @@ from basstler.github.client import (
     GitHubWrite,
     HttpMethod,
 )
+from basstler.github.file_proposal import FileUpdate, FileWrite, NewBranch
+from basstler.github.pull_request import NewPullRequest
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.token_form import RepositoryPermission
 from basstler.locations import WorkflowLocation
@@ -25,9 +27,8 @@ from basstler.review_triage.exceptions import MarkViewedWorkflowRefused
 from basstler.review_triage.viewed_request import ReviewTriageSecret
 from basstler.review_triage.viewed_setup import (
     ActionsEnabling,
-    FileUpdate,
-    FileWrite,
     MarkViewedSetup,
+    ProposalBranch,
     SetupState,
     WorkflowEnabling,
     WorkflowState,
@@ -59,6 +60,19 @@ class Resource:
         f"?ref={RepositoryDetails.from_json(WORKFLOW_REPOSITORY_DETAILS).default_branch}"
     )
     ACTIONS = f"{FORK.api_path}/actions/permissions"
+    OPEN_PROPOSALS = (
+        f"{FORK.pull_requests_path}?state=open"
+        f"&head={FORK.owner}:{ProposalBranch.MARK_VIEWED}"
+    )
+    PROPOSAL_BRANCH = f"{FORK.api_path}/git/ref/heads/{ProposalBranch.MARK_VIEWED}"
+    DEFAULT_BRANCH = (
+        f"{FORK.api_path}/git/ref/heads/"
+        f"{RepositoryDetails.from_json(WORKFLOW_REPOSITORY_DETAILS).default_branch}"
+    )
+    PROPOSED_FILE = (
+        f"{FORK.api_path}/contents/{WorkflowLocation.MARK_VIEWED.as_posix()}"
+        f"?ref={ProposalBranch.MARK_VIEWED}"
+    )
     WORKFLOW = WorkflowEnabling.workflow_path(FORK, WorkflowLocation.MARK_VIEWED)
     SECRET = f"{FORK.api_path}/actions/secrets/{ReviewTriageSecret.VIEWER_TOKEN}"
 
@@ -86,19 +100,38 @@ class ForkAnswers(GitHubAttemptClient):
     The body each readable path is answered with.
     """
 
+    forbidden: set[str] = field(default_factory=set)
+    """
+    The paths refused as forbidden rather than as not found.
+    """
+
+    write_answers: dict[str, Any] = field(default_factory=dict)
+    """
+    The body each write path is answered with, ``None`` for any other.
+    """
+
+    write_refusal: HTTPStatus | None = None
+    """
+    The status every write is refused with, ``None`` to accept them.
+    """
+
     sent: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
 
     def attempt_get(self, path: str) -> GitHubResponse:
+        if path in self.forbidden:
+            return refusal(HTTPStatus.FORBIDDEN, HttpMethod.GET, path)
         if path in self.answers:
             return GitHubResponse(self.answers[path])
         return refusal(HTTPStatus.NOT_FOUND, HttpMethod.GET, path)
 
     def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
         self.sent.append(write)
-        return GitHubResponse(None)
+        if self.write_refusal is not None:
+            return refusal(self.write_refusal, write.method, write.path)
+        return GitHubResponse(self.write_answers.get(write.path))
 
 
 INSTALLED_BLOB = "a-blob"
@@ -130,7 +163,9 @@ def answers(**overrides: Any) -> ForkAnswers:
         Resource.SECRET: {"name": ReviewTriageSecret.VIEWER_TOKEN},
     }
     readable |= {getattr(Resource, name): answer for name, answer in overrides.items()}
-    return ForkAnswers({path: body for path, body in readable.items() if body})
+    return ForkAnswers(
+        {path: body for path, body in readable.items() if body is not None}
+    )
 
 
 # %% taking the steps
@@ -159,13 +194,118 @@ def test_the_workflow_is_committed_to_a_fork_s_default_branch():
     ]
 
 
-def test_a_repository_that_is_no_fork_gets_the_workflow_as_a_step_left():
-    client = answers(WORKFLOW_FILE=None)
+# %% a repository that is no fork
+
+
+BASE_COMMIT = "a-base-commit"
+"""
+The commit the default branch points at.
+"""
+
+PROPOSAL = {"number": 7, "html_url": f"{FORK.url}/pull/7"}
+"""
+The pull request proposing the workflow.
+"""
+
+
+def unforked_answers(**overrides: Any) -> ForkAnswers:
+    """
+    :param overrides: Answers replacing the unset-up repository's, as for
+        :func:`answers`.
+    :return: A repository that is no fork, lacking the workflow and any proposal of it.
+    """
+    unset_up = {
+        "WORKFLOW_FILE": None,
+        "OPEN_PROPOSALS": [],
+        "DEFAULT_BRANCH": {"object": {"sha": BASE_COMMIT}},
+    }
+    client = answers(**(unset_up | overrides))
     client.answers[FORK.api_path] = fork_details(is_fork=False)
+    client.write_answers[FORK.pull_requests_path] = PROPOSAL
+    return client
+
+
+def test_a_repository_that_is_no_fork_gets_a_pull_request_adding_the_workflow():
+    client = unforked_answers()
     setup = MarkViewedSetup(FORK)
     setup.run(client)
-    assert [write for write in client.sent if isinstance(write, FileWrite)] == []
-    assert [step.text for step in setup.user_steps] == [setup.caller_workflow]
+    default_branch = RepositoryDetails.from_json(WORKFLOW_REPOSITORY_DETAILS)
+    assert [
+        write
+        for write in client.sent
+        if isinstance(write, (NewBranch, FileWrite, NewPullRequest))
+    ] == [
+        NewBranch(
+            FORK, ref=f"refs/heads/{ProposalBranch.MARK_VIEWED}", sha=BASE_COMMIT
+        ),
+        FileWrite(
+            FORK,
+            file=WorkflowLocation.MARK_VIEWED.as_posix(),
+            message=setup.workflow_proposal(default_branch).title,
+            content=base64.b64encode(setup.caller_workflow.encode()).decode(),
+            branch=ProposalBranch.MARK_VIEWED,
+        ),
+        NewPullRequest(
+            FORK,
+            title=setup.workflow_proposal(default_branch).title,
+            head=ProposalBranch.MARK_VIEWED,
+            base=default_branch.default_branch,
+            body=setup.workflow_proposal(default_branch).body,
+            draft=False,
+        ),
+    ]
+
+
+def test_merging_the_proposal_is_the_step_left():
+    setup = MarkViewedSetup(FORK)
+    setup.run(unforked_answers())
+    assert setup.user_steps[0].browser_steps[0] == f"Open {PROPOSAL['html_url']}."
+
+
+def test_an_open_proposal_is_not_opened_again():
+    setup = MarkViewedSetup(FORK)
+    proposed = installed_workflow(setup)
+    client = unforked_answers(
+        OPEN_PROPOSALS=[PROPOSAL],
+        PROPOSAL_BRANCH={"object": {"sha": BASE_COMMIT}},
+        PROPOSED_FILE=proposed,
+    )
+    setup.run(client)
+    assert client.sent == []
+
+
+def test_a_proposal_branch_holding_another_version_is_updated():
+    setup = MarkViewedSetup(FORK, on_every_pull_request=True)
+    client = unforked_answers(
+        PROPOSAL_BRANCH={"object": {"sha": BASE_COMMIT}},
+        PROPOSED_FILE=installed_workflow(MarkViewedSetup(FORK)),
+    )
+    setup.run(client)
+    updates = [write for write in client.sent if isinstance(write, FileUpdate)]
+    assert [(write.branch, write.sha) for write in updates] == [
+        (ProposalBranch.MARK_VIEWED, INSTALLED_BLOB)
+    ]
+
+
+def test_a_refused_proposal_leaves_the_filled_in_page_adding_the_workflow():
+    client = unforked_answers()
+    client.write_refusal = HTTPStatus.FORBIDDEN
+    setup = MarkViewedSetup(FORK)
+    setup.run(client)
+    page = setup.workflow_proposal(
+        RepositoryDetails.from_json(fork_details(is_fork=False))
+    ).new_file_page
+    assert setup.user_steps[0].browser_steps[0].startswith(f"Open {page} ")
+
+
+def test_a_refused_proposal_replacing_another_version_leaves_the_file_to_paste():
+    client = unforked_answers(WORKFLOW_FILE=installed_workflow(MarkViewedSetup(FORK)))
+    client.write_refusal = HTTPStatus.FORBIDDEN
+    setup = MarkViewedSetup(FORK, on_every_pull_request=True)
+    setup.run(client)
+    assert [step.text for step in setup.user_steps if step.text] == [
+        setup.caller_workflow
+    ]
 
 
 def test_actions_turned_off_are_turned_on():
@@ -226,8 +366,23 @@ def test_unreadable_actions_settings_are_never_changed_or_called_off():
     assert client.sent == []
     actions = f"Actions on {FORK.full_name}"
     assert [step.state for step in setup.steps if step.description == actions] == [
-        SetupState.REFUSED
+        SetupState.UNREADABLE
     ]
+
+
+def test_an_unreadable_secret_is_reported_unread_with_the_token_steps_left():
+    client = answers()
+    client.forbidden.add(Resource.SECRET)
+    setup = MarkViewedSetup(FORK)
+    setup.run(client)
+    secret = f"{ReviewTriageSecret.VIEWER_TOKEN} stored on {FORK.full_name}"
+    assert (
+        [step.state for step in setup.steps if step.description == secret],
+        len(setup.user_steps),
+    ) == (
+        [SetupState.UNREADABLE],
+        len(setup.token_steps(RepositoryDetails.from_json(fork_details()))),
+    )
 
 
 def test_basstler_s_own_caller_marks_every_pull_request():

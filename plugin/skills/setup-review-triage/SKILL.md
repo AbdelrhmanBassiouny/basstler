@@ -78,9 +78,9 @@ Relay its *Left to you* section as it printed it, with every link and command:
 - **Storing it:** the user runs `gh secret set` on their computer, or uses the browser
   steps. Never ask for the token in the chat, and never pass it on a command line you
   run.
-- **A repository that is no fork:** the setup prints the workflow file to add through
-  a pull request. Offer to open that pull request on a branch of its own, and open it
-  only if they accept.
+- **A repository that is no fork:** the setup opens a pull request adding the
+  workflow, or, where it may not push, links the new-file page with it filled in.
+  Relay the link; the user reviews and merges it.
 
 Once the user says they took the steps, run the setup again and report what it says
 now, not what you expect. Call the route set up only when nothing is left.

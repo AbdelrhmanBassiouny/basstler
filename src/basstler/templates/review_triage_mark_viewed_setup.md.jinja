@@ -1,7 +1,10 @@
 ## Marking files viewed from {{ setup.workflow_repository.full_name }}'s Actions
 
 {% for step in setup.steps %}
-- {{ step.description }}: {{ step.state }}{% if step.reason %} - {{ step.reason }}{% endif %}
+- {{ step.description }}: {{ step.state }}
+{% if step.reason %}
+  - {{ step.reason }}
+{% endif %}
 
 {% endfor %}
 {% if setup.user_steps %}

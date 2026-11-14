@@ -1,7 +1,7 @@
 # Installed by `basstler review-triage set-up-mark-viewed`. It marks a pull request's
 # mechanical files viewed for the owner of the token stored as {{ token_secret }};
-# `basstler review-triage mark-viewed` starts it where it cannot mark them itself. Both
-# references below follow basstler's {{ branch_or_tag }}; to pin a release, use its tag.
+# `basstler review-triage mark-viewed` starts it where it cannot mark them itself. It
+# runs basstler's {{ branch_or_tag }}; to pin a release, put its tag wherever that appears below.
 name: Mark viewed
 
 on:
@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   mark:
-    uses: {{ basstler_repository }}/{{ reusable_workflow }}@{{ branch_or_tag }}
+    uses: {{ reusable_workflow }}
     with:
       basstler_branch_or_tag: {{ branch_or_tag }}
       pull_request: {{ '${{' }} format('{0}', inputs.pull_request || github.event.pull_request.number) {{ '}}' }}
