@@ -10,7 +10,7 @@ from enum import Enum, IntEnum, StrEnum
 from urllib.parse import parse_qs as parse_query_string
 from urllib.parse import urlsplit as split_url
 
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 from basstler.stack.model import (
     PullRequest,
     Stack,
@@ -19,7 +19,6 @@ from basstler.stack.promotion_link import PromotionLinkParameter
 from basstler.stack.settings import Configuration
 
 from ..constants.stack import RemoteName, StackBranch, StackLabel
-
 
 # %% shared stack inputs
 

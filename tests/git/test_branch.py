@@ -4,8 +4,8 @@ Tests for a git branch, the base of every branch the package handles.
 
 from __future__ import annotations
 
-from basstler.branch import Branch
-from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.git.branch import Branch
+from basstler.git.remote_branch import RemoteBranch
 from basstler.stack.model import StackBranch
 
 # %% the reference a branch is kept under

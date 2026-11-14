@@ -8,17 +8,18 @@ from __future__ import annotations
 from basstler.stack.model import (
     BranchStatus,
     EffectiveParent,
+    IntegrationStrategy,
     ParentSituation,
     PullRequest,
     Reparent,
     RestackPlanEntry,
-    IntegrationStrategy,
     Stack,
+)
+from basstler.stack.model import (
     StackBranch as BranchOfStack,
 )
 
 from ..constants.stack import StackBranch
-
 from .dataset import StackRepository, build
 
 # %% the board

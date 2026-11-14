@@ -1,6 +1,6 @@
 """
-Tests for :mod:`basstler.pull_request_source`: reading the live state of a plan's pull
-requests from GitHub.
+Tests for :mod:`basstler.github.pull_request_source`: reading the live state of a plan's
+pull requests from GitHub.
 """
 
 from __future__ import annotations
@@ -11,28 +11,31 @@ from typing import Any
 
 import pytest
 
-from basstler.github.states import CombinedCheckState
-from basstler.maintenance.board import PullRequestField, PullRequestHeadKey
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.github import (
+from basstler.github.pull_request_record import (
+    PullRequestField,
+    PullRequestHeadKey,
+)
+from basstler.github.pull_request_source import GitHubPullRequestSource
+from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.github.repository_access import (
     CommitReport,
     GitHubRepository,
     GitHubRepositoryPath,
 )
+from basstler.github.states import CombinedCheckState
 from basstler.plan.dependencies import DependencyResolver
-from basstler.pull_request_source import GitHubPullRequestSource
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
 
-from .constants.paths import RecordedCommitChecks
-from .constants.site import SiteSampleText
-from .github.pull_request_api import (
+from ..constants.paths import RecordedCommitChecks
+from ..constants.site import SiteSampleText
+from ..github.pull_request_api import (
     api_pull_request,
     details_of,
     listing_path,
     pull_request_path,
 )
-from .github.recorded_client import RecordedGitHubClient
-from .plan_site.first_plan import (
+from ..github.recorded_client import RecordedGitHubClient
+from ..plan_site.first_plan import (
     ELSEWHERE_PULL_REQUEST,
     FIRST_PLAN,
     OPEN_PULL_REQUEST,

@@ -7,7 +7,7 @@ from __future__ import annotations
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 
 from .paths import DatasetLocation
 

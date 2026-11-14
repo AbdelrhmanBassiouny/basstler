@@ -17,6 +17,8 @@ from pathlib import Path
 import pytest
 
 import basstler
+from basstler.environment import EnvironmentFlag
+from basstler.exit_codes import SetupCheckExitCode
 from basstler.locations import (
     ClaudeCodeVariable,
     PackageLocation,
@@ -24,8 +26,6 @@ from basstler.locations import (
     ProjectLocation,
     WorkflowLocation,
 )
-from basstler.environment import EnvironmentFlag
-from basstler.exit_codes import SetupCheckExitCode
 from basstler.personal_notes import access
 from basstler.plan_site import build_start, dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
@@ -38,8 +38,8 @@ from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..project_declaration import ProjectDeclaration
 from ..scratch_repository import (
     SCRATCH_IDENTITY,
-    ScratchRepository,
     PackageSourceFile,
+    ScratchRepository,
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )

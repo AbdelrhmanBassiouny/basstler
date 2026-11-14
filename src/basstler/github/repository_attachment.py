@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 
 # %% the session's tools
 

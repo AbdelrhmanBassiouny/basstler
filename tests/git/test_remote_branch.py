@@ -9,12 +9,12 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from basstler.git.commands import GitCommandRunner
+from basstler.git.remote_branch import RemoteBranch
+from basstler.github.repository import Repository
 from basstler.json_model import JSONSerializable, ValidatedJSONModel
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.repository import Repository
 
-from .fork import ForkCheckout, RemoteName
+from ..maintenance.fork import ForkCheckout, RemoteName
 
 # %% helpers
 

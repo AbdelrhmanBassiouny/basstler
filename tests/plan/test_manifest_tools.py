@@ -9,21 +9,11 @@ import sys
 from pathlib import Path
 
 import pytest
-
 import yaml
 
 import basstler.plan.manifest_tools
-
 from basstler.exceptions import PlanValidationError
-from basstler.plan.validation import PlanValidator
-from basstler.plan.merge import PlanVersion
-from basstler.plan.model import PlanDocument
-from basstler.plan.model import (
-    ItemNotTrackedError,
-    ItemStatus,
-    ItemSummaryKey,
-    ManifestKey,
-)
+from basstler.github.repository import Repository
 from basstler.plan.manifest_tools import (
     BranchIndex,
     ManifestToolsCommand,
@@ -33,8 +23,15 @@ from basstler.plan.manifest_tools import (
     YamlBooleanCoercionError,
     main,
 )
-
-from basstler.repository import Repository
+from basstler.plan.merge import PlanVersion
+from basstler.plan.model import (
+    ItemNotTrackedError,
+    ItemStatus,
+    ItemSummaryKey,
+    ManifestKey,
+    PlanDocument,
+)
+from basstler.plan.validation import PlanValidator
 
 from ..constants.paths import DatasetLocation
 from ..fixture_plans import (

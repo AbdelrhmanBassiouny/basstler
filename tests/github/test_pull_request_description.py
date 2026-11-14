@@ -4,15 +4,14 @@ Tests for what a pass reads out of a fork pull request's description and writes 
 
 from __future__ import annotations
 
-from basstler.maintenance.constants import MaintenanceText
-from basstler.maintenance.description import (
+from basstler.github.constants import MaintenanceText
+from basstler.github.pull_request_description import (
     PullRequestDescription,
     UpstreamPullRequestLink,
 )
 
 from ..constants.paths import DatasetLocation
-
-from .fork import (
+from ..maintenance.fork import (
     A_SESSION_LINK,
     PromotionSampleText,
     StackPullRequestNumber,

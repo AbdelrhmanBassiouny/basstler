@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
+from basstler.git.commands import GitCommandRunner
+from basstler.github.repository import Repository
 from basstler.locations import ProjectLocation
-from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan.model import PlanDocument
 from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.plan_site.hub import (
@@ -23,9 +24,8 @@ from basstler.plan_site.hub import (
     SiteAddress,
     main,
 )
-from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.plan_site.plan import Item
-from basstler.repository import Repository
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.setup.steps import PersonalNotesSetting
 
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText

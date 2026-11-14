@@ -27,7 +27,6 @@ from typing import Any
 from basstler.plan.model import PlanManifest
 from basstler.plan.size_limits import Measure
 
-
 # %% output keys
 
 

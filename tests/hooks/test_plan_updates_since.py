@@ -18,26 +18,24 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import PluginLocation, ProjectLocation, RepositoryStateLocation
-from basstler.maintenance.constants import GitHubExecutable
-
-from ..constants.environment import ScrubbedEnvironmentPrefix, SearchPathVariable
-from ..constants.notes import ScratchBranch
-from ..constants.paths import DatasetLocation
-from ..script_runner import BashScriptRunner
-
-from ..executable_stubs import (
-    ExecutableStubDirectory,
-    path_hiding_executables,
-)
-
+from basstler.github.constants import GitHubExecutable
 from basstler.github.issue import PostedIssueComment
+from basstler.locations import PluginLocation, ProjectLocation, RepositoryStateLocation
 from basstler.plan.updates_since_support import (
     PlanUpdatesSinceMessage,
     PlanUpdatesSinceOption,
     no_default_repository_message,
 )
+
+from ..constants.environment import ScrubbedEnvironmentPrefix, SearchPathVariable
+from ..constants.notes import ScratchBranch
+from ..constants.paths import DatasetLocation
+from ..executable_stubs import (
+    ExecutableStubDirectory,
+    path_hiding_executables,
+)
 from ..scratch_repository import ScratchRepository
+from ..script_runner import BashScriptRunner
 
 PLAN_MANIFEST_NOT_STARTED = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 PLAN_MANIFEST_IN_PROGRESS = (

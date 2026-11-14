@@ -8,9 +8,10 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.git.commands import GitCommandRunner
 
 # %% violations
 
@@ -89,17 +90,40 @@ class StagedLines:
         """
         :param path: A file in the repository.
         :return: The line numbers, in the staged file, that the staged change adds or
-            changes.
+            changes; none for a file the change only moves.
+        """
+        return self.lines_by_file.get(path.resolve(), set())
+
+    @cached_property
+    def lines_by_file(self) -> dict[Path, set[int]]:
+        """
+        :return: The lines the staged change adds or changes, by the staged file they
+            are in, with moves detected so a moved file keeps its committed lines.
         """
         diff = self.git.run(
-            "diff", "--cached", "--unified=0", "--no-color", "--", str(path)
+            "diff",
+            "--cached",
+            "--find-renames",
+            "--unified=0",
+            "--no-color",
+            "--relative",
         )
+        lines_by_file: dict[Path, set[int]] = {}
         lines: set[int] = set()
-        for hunk in re.finditer(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
-            start = int(hunk[1])
-            count = 1 if hunk[2] is None else int(hunk[2])
+        for match in re.finditer(
+            r"^diff --git a/.+ b/(.+)$|^@@ -\S+ \+(\d+)(?:,(\d+))? @@",
+            diff,
+            re.MULTILINE,
+        ):
+            if match[1] is not None:
+                lines = lines_by_file.setdefault(
+                    (self.git.working_directory / match[1]).resolve(), set()
+                )
+                continue
+            start = int(match[2])
+            count = 1 if match[3] is None else int(match[3])
             lines.update(range(start, start + count))
-        return lines
+        return lines_by_file
 
 
 # %% checking files

@@ -9,7 +9,7 @@ from collections.abc import Container
 
 import pytest
 
-from basstler.stack.commit_move import (
+from basstler.git.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,
@@ -23,15 +23,13 @@ from basstler.stack.label_write import LabelWrite
 from basstler.stack.promotion_link import PromotionLink, PromotionLinkParameter
 
 from ..constants.stack import RemoteName, StackBranch, StackLabel
-
 from .dataset import (
     StackRepository,
     StackSampleText,
+    a_deep_stack_beside_an_independent_branch,
     make_configuration,
     prefilled,
-    a_deep_stack_beside_an_independent_branch,
 )
-
 
 # %% label writes
 

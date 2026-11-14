@@ -13,9 +13,10 @@ from typing import Any
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
-from basstler.locations import SiteTemplate
-from basstler.maintenance.github import ListingParameter, PullRequestListState
 from basstler.github.client import PageParameter
+from basstler.github.repository import GitHubAddress
+from basstler.github.repository_access import ListingParameter, PullRequestListState
+from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.plan import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
@@ -29,7 +30,6 @@ from basstler.plan_site.theme import (
     SkippedTheme,
 )
 from basstler.render_common import TemplatePage
-from basstler.repository import GitHubAddress
 
 MAXIMUM_PULL_REQUESTS_PER_PAGE = 100
 """

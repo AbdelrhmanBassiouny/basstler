@@ -15,7 +15,12 @@ import pytest
 
 from basstler.exceptions import PlanValidationError
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.board import PullRequestField
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_source import GitHubPullRequestSource
+from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.github.states import CombinedCheckState
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.plan.model import ItemStatus, PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
@@ -27,20 +32,18 @@ from basstler.plan_site.__main__ import (
     SiteDigest,
     SiteFile,
 )
-from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.cards import LiveStateAttribute, PlanTimeAttribute
+from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Plan
 from basstler.plan_site.theme import AppearanceSettings, SiteAppearance
-from basstler.pull_request_source import GitHubPullRequestSource
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
-from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
 from ..github.pull_request_api import api_pull_request, details_of, listing_path
+from ..github.recorded_client import RecordedGitHubClient
 from ..recorded_pull_requests import RecordedPullRequestSource
 from .first_plan import (
     ELSEWHERE_PULL_REQUEST,
@@ -49,7 +52,6 @@ from .first_plan import (
     OPEN_PULL_REQUEST,
     PLAN_REPOSITORY,
 )
-from ..github.recorded_client import RecordedGitHubClient
 from .test_theme import theme_from
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value

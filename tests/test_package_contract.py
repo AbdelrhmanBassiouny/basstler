@@ -21,15 +21,18 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
-
+from basstler.environment import GitBashVariable
+from basstler.locations import (
+    ClaudeCodeVariable,
+    PackageLocation,
+    PluginLocation,
+    ProjectLocation,
+)
 from basstler.package_layout import (
     PackageModule,
     command_line_entry_points,
     package_modules,
 )
-from basstler.environment import GitBashVariable
-from basstler.locations import ProjectLocation
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import FetchedBranchReference
 

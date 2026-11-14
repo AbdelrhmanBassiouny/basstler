@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from basstler.github_labels import GitHubLabel
+from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.github.repository import PullRequestReference
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.plan_site.__main__ import RepositorySite
 from basstler.plan_site.hub import NotesBranch, SiteAddress
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
-from basstler.repository import PullRequestReference
 from basstler.setup.steps import PersonalNotesSetting
 
 from ..constants.paths import DatasetLocation

@@ -11,9 +11,7 @@ from importlib.metadata import distributions
 
 import pytest
 
-from ..constants.paths import DatasetLocation
-from ..project_declaration import ProjectDeclaration
-from ..script_runner import PythonModuleRunner
+from basstler.locations import PackageLocation
 from basstler.setup import dependencies
 from basstler.setup.dependencies import (
     Dependency,
@@ -23,7 +21,10 @@ from basstler.setup.dependencies import (
     PyprojectKey,
     UnreadableDependencyDeclarationError,
 )
-from basstler.locations import PackageLocation
+
+from ..constants.paths import DatasetLocation
+from ..project_declaration import ProjectDeclaration
+from ..script_runner import PythonModuleRunner
 
 # %% the declaration
 

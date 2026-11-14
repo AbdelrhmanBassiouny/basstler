@@ -791,6 +791,11 @@ class PackageBoundarySnippet(PathEnumeration):
     The package directory, claimed by a lower and a higher distribution.
     """
 
+    PACKAGE_MAP = PACKAGE / "package_map.py"
+    """
+    The map the package declares for itself.
+    """
+
     LISTED_IMPORT = PACKAGE / "high" / "caller.py"
     """
     The higher distribution importing the lower one it lists, in both import forms.

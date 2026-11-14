@@ -14,9 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.locations import ClaudeCodeVariable
-from basstler.repository import Repository
 from basstler.github.client import GitHubReader
+from basstler.github.repository import Repository
+from basstler.github.rest_models import RestResponse
+from basstler.json_model import JSONModel
+from basstler.locations import ClaudeCodeVariable
 from basstler.upstream_reviews.clients import JobLogReader
 from basstler.upstream_reviews.exceptions import (
     HelperOutputIncomplete,
@@ -29,8 +31,6 @@ from basstler.upstream_reviews.request import (
     HelperJSONKey,
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.rest_models import RestResponse
-from basstler.json_model import JSONModel
 
 # %% the recording
 

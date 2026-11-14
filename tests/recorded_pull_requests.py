@@ -8,9 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from basstler.github.exceptions import GitHubCallFailed
-from basstler.pull_request_source import PullRequestSource
-from basstler.pull_request_state import PullRequestRecord
-from basstler.repository import PullRequestReference, Repository
+from basstler.github.pull_request_source import PullRequestSource
+from basstler.github.pull_request_state import PullRequestRecord
+from basstler.github.repository import PullRequestReference, Repository
 
 # %% recorded pull request state
 

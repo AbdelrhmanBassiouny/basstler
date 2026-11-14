@@ -17,14 +17,10 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.branch import Branch
 from basstler.environment import GitHubActionsVariable
-from basstler.locations import BasstlerRepositoryLocation, PathEnumeration
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.upstream_reviews.action.branch import BasstlerSource
-from basstler.workflows import ActivityType, Trigger, TriggerEvent, WorkflowKey
-from basstler.workflows import Workflow as DeclaredWorkflow
-from basstler.release_version import (
+from basstler.git.branch import Branch
+from basstler.git.commands import GitCommandRunner
+from basstler.github.release_version import (
     MalformedVersion,
     MergedPullRequest,
     PlannedRelease,
@@ -33,13 +29,17 @@ from basstler.release_version import (
     ReleaseVersion,
     VersionPart,
 )
+from basstler.github.workflows import ActivityType, Trigger, TriggerEvent, WorkflowKey
+from basstler.github.workflows import Workflow as DeclaredWorkflow
+from basstler.locations import BasstlerRepositoryLocation, PathEnumeration
+from basstler.upstream_reviews.action.branch import BasstlerSource
 
-from .constants.environment import SearchPathVariable
-from .constants.paths import RepositoryLocation
-from .plugin_manifest import PluginSource
-from .script_runner import BashCommandRunner
-from .scratch_repository import ScratchRepository, initialize_bare_repository
-from .workflow_definition import Workflow
+from ..constants.environment import SearchPathVariable
+from ..constants.paths import RepositoryLocation
+from ..plugin_manifest import PluginSource
+from ..scratch_repository import ScratchRepository, initialize_bare_repository
+from ..script_runner import BashCommandRunner
+from ..workflow_definition import Workflow
 
 
 class ReleaseSampleVersion(StrEnum):
@@ -423,7 +423,7 @@ class ReleaseGate(StrEnum):
 
 class WorkflowFileKey(StrEnum):
     """
-    The keys of a workflow file read here, beyond those :mod:`basstler.workflows` reads.
+    The keys of a workflow file read here, beyond those :mod:`basstler.github.workflows` reads.
     """
 
     NAME = "name"

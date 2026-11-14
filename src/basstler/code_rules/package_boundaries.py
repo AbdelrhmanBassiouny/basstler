@@ -5,12 +5,15 @@ Finds imports that cross from one distribution into another it does not list.
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator
-from dataclasses import dataclass
+import shutil
+import tempfile
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import TracebackType
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
-from basstler.json_model import ValidatedJSONModel
+from basstler.git.commands import GitCommandRunner
 from basstler.locations import PackageLocation
 from basstler.package_map import PACKAGE_MAP, PackageMap
 
@@ -34,7 +37,8 @@ class ModuleImport:
     """
 
 
-class BoundaryCrossing(ValidatedJSONModel):
+@dataclass(frozen=True)
+class BoundaryCrossing:
     """
     A module importing a module of a distribution its own distribution does not list.
     """
@@ -50,7 +54,28 @@ class BoundaryCrossing(ValidatedJSONModel):
     """
 
 
-class PackageCrossings(ValidatedJSONModel):
+@dataclass(frozen=True)
+class ModuleRenames:
+    """
+    The modules of the package a change moved.
+    """
+
+    new_name_by_old_name: Mapping[str, str]
+    """
+    Each moved module's dotted name within ``basstler`` before the change, and its name
+    after.
+    """
+
+    def current_name(self, module: str) -> str:
+        """
+        :param module: A module's dotted name within ``basstler`` before the change.
+        :return: Its name after the change; *module* itself when it did not move.
+        """
+        return self.new_name_by_old_name.get(module, module)
+
+
+@dataclass(frozen=True)
+class PackageCrossings:
     """
     Every boundary crossing of one checkout of the package.
     """
@@ -67,6 +92,21 @@ class PackageCrossings(ValidatedJSONModel):
         """
         return tuple(
             crossing for crossing in self.crossings if crossing not in base.crossings
+        )
+
+    def renamed(self, renames: ModuleRenames) -> PackageCrossings:
+        """
+        :param renames: The modules a change moved.
+        :return: These crossings, with each module named as it is after the change.
+        """
+        return PackageCrossings(
+            crossings=tuple(
+                BoundaryCrossing(
+                    importing_module=renames.current_name(crossing.importing_module),
+                    imported_module=renames.current_name(crossing.imported_module),
+                )
+                for crossing in self.crossings
+            )
         )
 
 
@@ -140,6 +180,33 @@ class PackageBoundaryChecker(CodeRuleChecker):
             )
         )
 
+    def module_renames(self, git: GitCommandRunner, base_commit: str) -> ModuleRenames:
+        """
+        :param git: The checkout of the package.
+        :param base_commit: The commit the checked out package is compared with.
+        :return: The modules of :attr:`package_directory` git detects as moved since
+            *base_commit*.
+        """
+        listing = git.run(
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "--diff-filter=R",
+            "--relative",
+            base_commit,
+            "HEAD",
+            "--",
+            str(self.package_directory),
+        )
+        new_name_by_old_name = {}
+        for line in listing.splitlines():
+            _, old_path, new_path = line.split("\t")
+            old_module = self.module_name(git.working_directory / old_path)
+            new_module = self.module_name(git.working_directory / new_path)
+            if old_path.endswith(".py") and old_module and new_module:
+                new_name_by_old_name[old_module] = new_module
+        return ModuleRenames(new_name_by_old_name)
+
     def module_name(self, path: Path) -> str | None:
         """
         :param path: A Python source file.
@@ -197,3 +264,64 @@ class PackageBoundaryChecker(CodeRuleChecker):
         if location.is_dir() or location.with_suffix(".py").is_file():
             return candidate
         return package
+
+
+# %% the package at another commit
+
+
+@dataclass
+class PackageAtCommit:
+    """
+    The package as one commit holds it, in a detached worktree removed on exit.
+    """
+
+    git: GitCommandRunner
+    """
+    The checkout the worktree is added to.
+    """
+
+    commit: str
+    """
+    The commit checked out.
+    """
+
+    package_directory: Path
+    """
+    The ``basstler`` package directory in :attr:`git`'s checkout.
+    """
+
+    directory: Path = field(init=False)
+    """
+    The worktree's root, once entered.
+    """
+
+    def __enter__(self) -> PackageBoundaryChecker | None:
+        """
+        :return: A checker of the package at :attr:`commit`, under the package map that
+            commit declares; none when it declares no map.
+        """
+        self.directory = Path(tempfile.mkdtemp())
+        self.git.run(
+            "worktree", "add", "--detach", "--quiet", str(self.directory), self.commit
+        )
+        package = self.directory / self.package_directory.resolve().relative_to(
+            self.git.working_directory.resolve()
+        )
+        map_file = package / PackageLocation.PACKAGE_MAP.relative_to(
+            PackageLocation.DIRECTORY
+        )
+        if not map_file.is_file():
+            return None
+        return PackageBoundaryChecker(PackageMap.declared_in(map_file), package)
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """
+        Remove the worktree, whether or not the package was read.
+        """
+        self.git.attempt("worktree", "remove", "--force", str(self.directory))
+        shutil.rmtree(self.directory, ignore_errors=True)

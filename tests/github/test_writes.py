@@ -10,13 +10,18 @@ from typing import Any
 import pytest
 
 from basstler.github.client import GitHubWrite
-from basstler.github.issue import ClosingReason, IssueClosing, IssueComment, IssueState
-from basstler.github.issue import NewIssue
+from basstler.github.issue import (
+    ClosingReason,
+    IssueClosing,
+    IssueComment,
+    IssueState,
+    NewIssue,
+)
 from basstler.github.label import LabelReplacement, NewLabel, RepositoryLabel
 from basstler.github.pull_request import NewPullRequest, PullRequestDescription
+from basstler.github.repository import Repository
 from basstler.github.workflow_run import WorkflowDispatch
 from basstler.locations import WorkflowLocation
-from basstler.repository import Repository
 
 # %% the writes and the bodies GitHub reads from them
 

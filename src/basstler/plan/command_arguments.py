@@ -13,9 +13,11 @@ from typing import Any
 
 import yaml
 
+from basstler.github.pull_request_state import (
+    PullRequestRecord,
+    PullRequestsByRepository,
+)
 from basstler.plan.dependencies import PlanDirectory
-from basstler.pull_request_state import PullRequestRecord, PullRequestsByRepository
-
 
 # %% options
 
@@ -29,7 +31,7 @@ class PlanCommandOption(StrEnum):
 
     PULL_REQUEST_DATA = "--pr-data"
     """The JSON file holding live pull request state - see
-    :mod:`basstler.pull_request_state` for its shape."""
+    :mod:`basstler.github.pull_request_state` for its shape."""
 
     PLANS_DIRECTORY = "--plans-dir"
     """The directory holding every plan as ``<plan-id>/plan.yaml``, required

@@ -15,12 +15,12 @@ from cyclopts import App
 from cyclopts.types import ExistingDirectory, ExistingFile
 
 from basstler.exit_codes import ExitCode
+from basstler.github.pull_request_source import GitHubPullRequestSource
 from basstler.plan.merged_items.every_plan import (
     MergedItemsCommand,
     MergedItemsInEveryPlan,
 )
 from basstler.plan.merged_items.plan_items import MergedItems
-from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

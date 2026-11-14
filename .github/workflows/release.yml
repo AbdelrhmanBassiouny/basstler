@@ -63,7 +63,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -m basstler.release_version unreleased --checkout . \
+          python -m basstler.github.release_version unreleased --checkout . \
             | while read -r commit; do
                 gh api "repos/${GITHUB_REPOSITORY}/commits/${commit}/pulls"
               done \
@@ -73,7 +73,7 @@ jobs:
         id: release
         working-directory: basstler
         run: |
-          release="$(python -m basstler.release_version release --checkout . \
+          release="$(python -m basstler.github.release_version release --checkout . \
             --pull-requests "${RUNNER_TEMP}/pull-requests.json")"
           tag="$(printf '%s\n' "${release}" | sed -n 's/^tag=//p')"
           if [ -z "${tag}" ]; then
@@ -83,7 +83,7 @@ jobs:
           git tag "${tag}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          plugin="$(python -m basstler.release_version plugin --checkout . --tag "${tag}" \
+          plugin="$(python -m basstler.github.release_version plugin --checkout . --tag "${tag}" \
             --previous "refs/remotes/origin/${PLUGIN_RELEASE_BRANCH}")"
           # One atomic push: the plugin never syncs a release the tag does not name yet,
           # and a release behind the branches moves none of them.

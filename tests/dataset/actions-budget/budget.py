@@ -5,7 +5,7 @@ exactly the one rule its file name says, or none.
 
 from __future__ import annotations
 
-from basstler.actions_budget import ActionsBudget, WorkflowLimits
+from basstler.github.actions_budget import ActionsBudget, WorkflowLimits
 
 # %% the budget
 

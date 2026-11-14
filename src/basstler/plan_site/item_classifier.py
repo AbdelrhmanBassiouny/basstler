@@ -8,17 +8,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.pull_request_state import (
+    LivePullRequests,
+    LiveState,
+    PullRequestRecord,
+)
+from basstler.github.repository import PullRequestReference, Repository
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.workflows import PlanSiteSecret
-from basstler.pull_request_state import (
-    LiveState,
-    PullRequestRecord,
-    LivePullRequests,
-)
-from basstler.repository import PullRequestReference, Repository
 
 # %% the classifier
 

@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING
 from basstler.class_property import classproperty
 
 if TYPE_CHECKING:
-    from basstler.plan_site.plan import Item, Track, Wave
-    from basstler.repository import PullRequestReference
+    from basstler.github.repository import PullRequestReference
     from basstler.plan.dependencies import (
         Dependency,
         ResolvedDependency,
         UnresolvedDependency,
     )
+    from basstler.plan_site.plan import Item, Track, Wave
 
 
 # %% dependency chips

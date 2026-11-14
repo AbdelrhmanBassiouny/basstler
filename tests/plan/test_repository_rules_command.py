@@ -21,8 +21,8 @@ from basstler.plan.repository_rules_command import (
 )
 
 from ..constants.paths import DatasetLocation
-from ..scratch_repository import ScratchRepository
 from ..personal_notes.test_branch import published_file
+from ..scratch_repository import ScratchRepository
 
 # %% the notes branch
 

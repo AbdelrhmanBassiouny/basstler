@@ -6,14 +6,14 @@ item carrying the live state the renderer fills in.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import cached_property
 from enum import StrEnum
+from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
+from basstler.github.pull_request_state import LiveState, PullRequestRecord
+from basstler.github.repository import GitHubAddress, PullRequestReference
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.pull_request_state import LiveState, PullRequestRecord
 from basstler.render_common import sanitize_http_url
-from basstler.repository import GitHubAddress, PullRequestReference
 
 if TYPE_CHECKING:
     from basstler.plan_site.cards import DependencyChip, ItemAction, StartNowAction

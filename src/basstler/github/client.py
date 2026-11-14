@@ -18,8 +18,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
-from functools import cached_property
 from enum import StrEnum
+from functools import cached_property
 from http import HTTPStatus
 from http.client import HTTPResponse
 from typing import Annotated, Any
@@ -28,16 +28,16 @@ from pydantic import Field
 
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
+from basstler.github.constants import GitHubExecutable
 from basstler.github.credential import CredentialProvider, GitHubCredential
-from basstler.json_model import ValidatedJSONModel
 from basstler.github.exceptions import (
-    GitHubCredentialUnavailableError,
     GitHubCallFailed,
+    GitHubCredentialUnavailableError,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
-from basstler.maintenance.constants import GitHubExecutable
-from basstler.repository import GitHubAddress, Repository
+from basstler.github.repository import GitHubAddress, Repository
+from basstler.json_model import ValidatedJSONModel
 
 # %% the interface
 

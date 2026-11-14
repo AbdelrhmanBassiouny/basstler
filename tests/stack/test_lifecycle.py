@@ -12,13 +12,11 @@ from basstler.stack.model import (
 )
 
 from ..constants.stack import StackBranch
-
 from .dataset import (
     StackRepository,
-    build,
     a_deep_stack_beside_an_independent_branch,
+    build,
 )
-
 
 # %% a whole stack through its lifecycle
 

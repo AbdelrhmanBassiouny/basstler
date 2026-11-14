@@ -1,12 +1,12 @@
 """
-Tests for :mod:`basstler.repository_attachment`: telling a cloud session to attach a
-repository it cannot reach.
+Tests for :mod:`basstler.github.repository_attachment`: telling a cloud session to
+attach a repository it cannot reach.
 """
 
 from __future__ import annotations
 
-from basstler.repository import Repository
-from basstler.repository_attachment import RepositoryAttachment, SessionTool
+from basstler.github.repository import Repository
+from basstler.github.repository_attachment import RepositoryAttachment, SessionTool
 
 ATTACHMENT = RepositoryAttachment(
     Repository.parse("an-owner/a-repository"),

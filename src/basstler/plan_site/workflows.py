@@ -16,13 +16,13 @@ import yaml
 
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
+from basstler.github.repository import Repository
+from basstler.github.workflows import ActivityType
+from basstler.json_model import JSONModel
 from basstler.locations import WorkflowLocation
 from basstler.plan_site.exceptions import PlanSiteTokenNotEnteredError
 from basstler.render_common import create_template_environment
-from basstler.repository import Repository
-from basstler.json_model import JSONModel
 from basstler.upstream_reviews.action.branch import BasstlerSource
-from basstler.workflows import ActivityType
 
 if TYPE_CHECKING:
     from basstler.plan_site.site_repository import SiteRepository

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.exceptions import DataclassException
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 
 # %% errors

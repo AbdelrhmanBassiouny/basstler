@@ -16,7 +16,7 @@ from basstler.exceptions import (
     NotesPushRejectedError,
     UnsafeNotesPathError,
 )
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.git.commands import GitCommandRunner
 from basstler.personal_notes.branch import (
     NotesBranchWriter,
     NotesEdit,

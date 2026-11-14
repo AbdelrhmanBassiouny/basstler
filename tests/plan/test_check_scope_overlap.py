@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 import basstler.plan.check_scope_overlap
-from ..constants.paths import RepositoryLocation
+from basstler.locations import ProjectLocation
 from basstler.plan.check_scope_overlap import (
     Candidate,
     ReportKey,
@@ -22,8 +22,7 @@ from basstler.plan.check_scope_overlap import (
     build_scope_report,
 )
 
-from basstler.locations import ProjectLocation
-
+from ..constants.paths import RepositoryLocation
 from ..scratch_repository import ScratchRepository
 
 CHECK_SCOPE_OVERLAP_MODULE = basstler.plan.check_scope_overlap.__name__
