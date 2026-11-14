@@ -21,7 +21,7 @@ from basstler.maintenance.promotion import (
     promote,
 )
 from basstler.maintenance.restack_procedure import restack
-from basstler.stack.promotion_link import PromotionLinkParameter
+from basstler.github.pull_request_form import PullRequestFormParameter
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch, StackLabel
@@ -200,7 +200,7 @@ def test_the_upstream_pull_request_opens_with_the_written_points_and_the_link_ba
         a_stack(fork_checkout, the_board()), a_parent_with_a_description(), summaries
     )
 
-    assert prefilled(promoted[0].url, PromotionLinkParameter.BODY).splitlines() == [
+    assert prefilled(promoted[0].url, PullRequestFormParameter.BODY).splitlines() == [
         *(f"- {point}" for point in summary.points),
         "",
         link_back_to(StackPullRequestNumber.PARENT),
@@ -218,7 +218,7 @@ def test_a_written_title_replaces_the_fork_title_upstream(
     )
 
     assert (
-        prefilled(promoted[0].url, PromotionLinkParameter.TITLE)
+        prefilled(promoted[0].url, PullRequestFormParameter.TITLE)
         == summaries.for_pull_request(StackPullRequestNumber.PARENT).title
     )
 
@@ -238,11 +238,11 @@ def test_a_branch_nobody_wrote_for_opens_with_only_its_title_and_the_link_back(
         PromotionSummaries(),
     )
 
-    assert prefilled(promoted[0].url, PromotionLinkParameter.BODY) == link_back_to(
+    assert prefilled(promoted[0].url, PullRequestFormParameter.BODY) == link_back_to(
         StackPullRequestNumber.PARENT
     )
     assert (
-        prefilled(promoted[0].url, PromotionLinkParameter.TITLE)
+        prefilled(promoted[0].url, PullRequestFormParameter.TITLE)
         == PromotionSampleText.TITLE
     )
 
@@ -276,7 +276,7 @@ def test_a_whole_pass_promotes_with_the_summaries_it_was_given(
         MaintenanceText.PROMOTION_HEADING
     )
     assert (
-        prefilled(recorded_link, PromotionLinkParameter.TITLE)
+        prefilled(recorded_link, PullRequestFormParameter.TITLE)
         == PromotionSummaries.read_from(summaries_document)
         .for_pull_request(written.pull_request_number)
         .title

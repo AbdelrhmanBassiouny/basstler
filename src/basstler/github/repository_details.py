@@ -13,6 +13,17 @@ from basstler.json_model import ValidatedJSONModel
 # %% the repository resource
 
 
+class ParentRepository(ValidatedJSONModel):
+    """
+    The repository a fork was made from, as the fork's resource names it.
+    """
+
+    full_name: str
+    """
+    The parent's ``owner/name``.
+    """
+
+
 class RepositoryDetails(ValidatedJSONModel):
     """
     One repository, as its REST resource describes it.
@@ -31,4 +42,9 @@ class RepositoryDetails(ValidatedJSONModel):
     is_private: Annotated[bool, Field(alias="private")]
     """
     Whether only the people and tokens granted access can read it.
+    """
+
+    parent: ParentRepository | None = None
+    """
+    The repository it was forked from, ``None`` when it is no fork.
     """

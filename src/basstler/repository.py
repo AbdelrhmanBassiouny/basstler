@@ -310,6 +310,12 @@ class Repository:
         return self.full_name
 
 
+BASSTLER_REPOSITORY = Repository("KAOS-repositories", "basstler")
+"""
+The repository basstler is developed in, whose reusable workflows users' callers run.
+"""
+
+
 @dataclass(frozen=True)
 class PullRequestReference:
     """

@@ -266,6 +266,34 @@ class ReviewTriageLocation(PathEnumeration):
     The Markdown report of which files of a pull request need review.
     """
 
+    MARK_VIEWED_SETUP_TEMPLATE = (
+        PackageLocation.TEMPLATES.value / "review_triage_mark_viewed_setup.md.jinja"
+    )
+    """
+    The report of setting a repository's Actions up to mark files viewed.
+    """
+
+    MARK_VIEWED_CALLER_TEMPLATE = (
+        PackageLocation.TEMPLATES.value / "review_triage_mark_viewed_caller.yml"
+    )
+    """
+    The workflow installed on a user's repository that calls basstler's reusable
+    workflow marking files viewed.
+    """
+
+
+class GitHubTemplate(PathEnumeration):
+    """
+    The templates the GitHub client's models render.
+    """
+
+    SHARED_TOKEN_STORE_COMMAND = (
+        PackageLocation.TEMPLATES.value / "shared_token_store_command.sh"
+    )
+    """
+    The command storing one token, read once at a hidden prompt, as several secrets.
+    """
+
 
 class PluginLocation(PathEnumeration):
     """
@@ -376,6 +404,11 @@ class BasstlerRepositoryLocation(PathEnumeration):
     The plugin's manifest: its name, description and, once released, version.
     """
 
+    REVIEW_TRIAGE_README = Path("docs") / "review-triage" / "README.md"
+    """
+    How to use the review triage and set up marking files viewed.
+    """
+
     @property
     def path_in_plugin(self) -> Path:
         """
@@ -484,7 +517,7 @@ class ProjectLocation(PathEnumeration):
 
 class WorkflowLocation(PathEnumeration):
     """
-    The GitHub Actions workflows the plan site runs on, relative to the root of the
+    The GitHub Actions workflows basstler runs or starts, relative to the root of the
     branch that holds each.
     """
 
@@ -512,6 +545,17 @@ class WorkflowLocation(PathEnumeration):
     """
     The workflow on a notes repository's default branch that starts :attr:`PLAN_SITE`
     whenever a pull request merges.
+    """
+
+    REVIEW_TRIAGE_MARK_VIEWED = DIRECTORY / "review-triage-mark-viewed.yml"
+    """
+    basstler's reusable workflow that marks a pull request's mechanical files viewed.
+    """
+
+    MARK_VIEWED = DIRECTORY / "mark-viewed.yml"
+    """
+    The workflow on the user's repository that calls :attr:`REVIEW_TRIAGE_MARK_VIEWED`
+    with the user's own token.
     """
 
 

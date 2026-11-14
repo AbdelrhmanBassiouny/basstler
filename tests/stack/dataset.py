@@ -15,7 +15,7 @@ from basstler.stack.model import (
     PullRequest,
     Stack,
 )
-from basstler.stack.promotion_link import PromotionLinkParameter
+from basstler.github.pull_request_form import PullRequestFormParameter
 from basstler.stack.settings import Configuration
 
 from ..constants.stack import RemoteName, StackBranch, StackLabel
@@ -195,7 +195,7 @@ def build(
 # %% reading a compare-and-create link
 
 
-def prefilled(url: str, parameter: PromotionLinkParameter) -> str:
+def prefilled(url: str, parameter: PullRequestFormParameter) -> str:
     """
     :param url: A compare-and-create link.
     :param parameter: The prefill to read out of it.

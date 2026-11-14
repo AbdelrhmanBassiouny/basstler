@@ -10,7 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from collections.abc import Callable
 from enum import Enum, StrEnum
@@ -88,6 +88,7 @@ from basstler.plan_site.workflows import (
     WorkflowStep,
 )
 from basstler.repository import GitHubAddress, Repository
+from basstler.review_triage.viewed_request import ReviewTriageSecret
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 from basstler.github.states import CheckOutcome
@@ -2131,3 +2132,57 @@ def test_the_command_takes_every_option_it_names(option):
     _, bound, _ = publication_app.parse_args([option, "a-value"])
 
     assert list(bound.arguments.values()) == ["a-value"]
+
+
+# %% marking files viewed with the build's token
+
+
+@dataclass
+class UnsetUpClient(PullRequestOpeningClient):
+    """
+    Answers like :class:`PullRequestOpeningClient`, and every path it holds no
+    recording for as missing.
+    """
+
+    def attempt_get(self, path: str) -> GitHubResponse:
+        if path in self.responses or path in self.refusals:
+            return super().attempt_get(path)
+        self.calls.append(path)
+        return GitHubResponse(None, failure=refusal_of(path, HTTPStatus.NOT_FOUND))
+
+
+def published_marking_viewed(published: Publishing):
+    """
+    :param published: A notes repository published once, without marking files viewed.
+    :return: The report of publishing it again, also setting up marking files viewed.
+    """
+    runs = published.runs_none()
+    client = UnsetUpClient(runs.responses, opened=runs.opened, refusals=runs.refusals)
+    return replace(
+        published.publication(client), mark_viewed_on=published.notes_repository
+    ).publish()
+
+
+def test_one_owner_s_build_and_marking_files_viewed_leave_one_token_step(published):
+    report = published_marking_viewed(published)
+    assert [
+        pending.step
+        for pending in report.pending
+        if pending.step in (UserStep.CREATE_TOKEN, UserStep.STORE_TOKEN)
+    ] == []
+
+
+def test_the_shared_token_is_stored_as_both_secrets(published):
+    report = published_marking_viewed(published)
+    (command,) = [
+        step.command for step in report.mark_viewed.user_steps if step.command
+    ]
+    assert [
+        f"gh secret set {secret}" in command
+        for secret in (PlanSiteSecret.TOKEN, ReviewTriageSecret.VIEWER_TOKEN)
+    ] == [True, True]
+
+
+def test_marking_files_viewed_is_reported_after_the_plan_site(published):
+    report = published_marking_viewed(published)
+    assert report.render().endswith(report.mark_viewed_report)
