@@ -11,15 +11,19 @@ ever written to the upstream.
 from __future__ import annotations
 
 import secrets
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
 from basstler.class_property import classproperty
+from basstler.github.pull_request_record import (
+    PullRequestField,
+    PullRequestHead,
+    PullRequestRecord,
+)
 from basstler.github.repository import Repository
 from basstler.github.repository_access import PullRequestReader
-from basstler.locations import ClaudeCodeVariable
-from basstler.maintenance.board import UpstreamPullRequests
 from basstler.upstream_reviews.action.exchange import (
     ActionAnswer,
     ActionRequest,
@@ -28,32 +32,6 @@ from basstler.upstream_reviews.action.exchange import (
 from basstler.upstream_reviews.action.recording import ActionJSONKey
 
 # %% vocabulary
-
-
-class UpstreamReadRoute(StrEnum):
-    """
-    How a pass reads the upstream's open pull requests.
-    """
-
-    DIRECT = "direct"
-    """
-    Through the GitHub API, with the session's own credential.
-    """
-
-    ACTION = "action"
-    """
-    Through the fork's Action, with the runner's credential.
-    """
-
-    @classmethod
-    def for_this_session(cls) -> UpstreamReadRoute:
-        """
-        :return: :attr:`ACTION` in a Claude Code cloud session, whose proxy refuses the
-            upstream's API until the upstream is attached; :attr:`DIRECT` elsewhere.
-        """
-        if ClaudeCodeVariable.REMOTE.is_true():
-            return cls.ACTION
-        return cls.DIRECT
 
 
 class OpenPullRequestsKey(StrEnum):
@@ -168,3 +146,81 @@ class OpenPullRequestsAnswer(ActionAnswer):
                 self.upstream_pull_requests.to_json()
             ),
         }
+
+
+# %% what the run found
+
+
+# %% what the export reads beside the fork's pull requests
+
+
+class UpstreamPullRequestsKey(StrEnum):
+    """
+    The keys :class:`UpstreamPullRequests` is written to JSON under.
+    """
+
+    FORK = "fork"
+    PULL_REQUEST_BY_BRANCH = "pull_request_by_branch"
+
+
+@dataclass(frozen=True)
+class UpstreamPullRequests:
+    """
+    The open upstream pull requests opened from the fork's branches.
+    """
+
+    fork: Repository
+    """
+    The fork whose branches are reviewed.
+    """
+
+    pull_request_by_branch: Mapping[str, int]
+    """
+    Each fork branch under review, and the upstream pull request reviewing it.
+    """
+
+    def pull_request_for(self, head: PullRequestHead) -> int | None:
+        """:param head: A fork pull request's head.
+        :return: The open upstream pull request opened from it, ``None`` when there is
+            none or the head lives outside the fork."""
+        if head.repository != self.fork.full_name:
+            return None
+        return self.pull_request_by_branch.get(head.branch)
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> UpstreamPullRequests:
+        """
+        :param data: What :meth:`to_json` wrote.
+        :return: The pull requests it holds.
+        """
+        return cls(
+            Repository.parse(data[UpstreamPullRequestsKey.FORK]),
+            dict(data[UpstreamPullRequestsKey.PULL_REQUEST_BY_BRANCH]),
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        """:return: The fork and each of its branches' upstream pull request."""
+        return {
+            UpstreamPullRequestsKey.FORK: self.fork.full_name,
+            UpstreamPullRequestsKey.PULL_REQUEST_BY_BRANCH: dict(
+                self.pull_request_by_branch
+            ),
+        }
+
+    @classmethod
+    def from_api_records(
+        cls, records: Iterable[PullRequestRecord], fork: Repository
+    ) -> UpstreamPullRequests:
+        """
+        :param records: The upstream's open pull requests.
+        :param fork: The fork whose branches to look for.
+        :return: The ones whose head is a branch of *fork*.
+        :raises MissingPullRequestFieldError: If a record omits its number or its head.
+        """
+        pull_request_by_branch = {}
+        for record in records:
+            number = int(PullRequestField.NUMBER.read(record))
+            head = PullRequestHead.from_record(record, number)
+            if head.repository == fork.full_name:
+                pull_request_by_branch[head.branch] = number
+        return cls(fork, pull_request_by_branch)

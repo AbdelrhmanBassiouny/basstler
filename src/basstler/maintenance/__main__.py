@@ -40,7 +40,7 @@ from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.git.commands import GitCommandRunner
 from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.commands import MaintenanceCommand, MaintenancePass
-from basstler.maintenance.upstream_action import UpstreamReadRoute
+from basstler.maintenance.upstream_read_route import UpstreamReadRoute
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 from basstler.github.exceptions import UpstreamReadError

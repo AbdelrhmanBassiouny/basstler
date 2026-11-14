@@ -28,10 +28,8 @@ from basstler.github.pull_request_record import (
 from basstler.github.repository import Repository
 from basstler.github.states import CombinedCheckState
 from basstler.locations import ProjectLocation
-from basstler.maintenance.board import (
-    BoardExport,
-    UpstreamPullRequests,
-)
+from basstler.maintenance.board import BoardExport
+from basstler.upstream_reviews.action.open_pull_requests import UpstreamPullRequests
 from basstler.stack.model import (
     PullRequest,
     Stack,
