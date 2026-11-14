@@ -10,6 +10,11 @@ from urllib.parse import urlencode
 
 from basstler.repository import GitHubAddress
 
+FINE_GRAINED_TOKEN_PAGE = f"{GitHubAddress.WEB}/settings/personal-access-tokens/new"
+"""
+Where a fine-grained token is created.
+"""
+
 # %% the form's parameters
 
 
@@ -47,6 +52,11 @@ class RepositoryPermission(StrEnum):
     PULL_REQUESTS = "pull_requests"
     """
     The repository's pull requests, their reviews and their files' viewed state.
+    """
+
+    ACTIONS = "actions"
+    """
+    The repository's Actions workflows and runs.
     """
 
 
@@ -111,4 +121,4 @@ class FineGrainedTokenForm:
                 **self.permissions,
             }
         )
-        return f"{GitHubAddress.WEB}/settings/personal-access-tokens/new?{query}"
+        return f"{FINE_GRAINED_TOKEN_PAGE}?{query}"
