@@ -258,6 +258,12 @@ class SiteTemplate(PathEnumeration):
     before it is drawn, and keeps a new pick with.
     """
 
+    CLICK_BURST_SCRIPT = PackageLocation.TEMPLATES.value / "site_click_burst.js"
+    """
+    The script every site page throws a burst of the theme's sparks with when a button
+    or a menu is pressed.
+    """
+
 
 class BasstlerVariable(EnvironmentVariable):
     """

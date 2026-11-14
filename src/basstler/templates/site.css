@@ -36,6 +36,7 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
 {% if style.backdrop != backdrop.NONE %}
     --backdrop-scene: {{ artwork("backdrop_" ~ style.backdrop ~ "_scene", palette) }};
     --backdrop-particles: {{ artwork("backdrop_" ~ style.backdrop ~ "_particles", palette) }};
+    --burst-art: {{ artwork("burst_" ~ style.backdrop, palette) }};
 {% endif %}
 {% endmacro %}
 
@@ -76,7 +77,12 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
     --heading-scale: 1.25;
     --rule-width: 0px;
     --chip-depth: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 -1px 0 rgb(0 0 0 / 0.35), 0 1px 2px rgb(0 0 0 / 0.3);
-    --chip-rim: color-mix(in srgb, currentColor 45%, transparent);
+    --chip-rim: transparent;
+    --chip-art: var(--button-art);
+    --chip-border-width: 3px;
+    --chip-radius: 2px;
+    --chip-clip: none;
+    --chip-background-clip: padding-box;
 {% endif %}
 {% endmacro %}
 
@@ -84,15 +90,16 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
 {% if theme_backdrop != backdrop.NONE %}
     --text-halo: 0 0 3px var(--bg), 0 0 6px var(--bg), 0 0 10px var(--bg);
     --scene-room: 12rem;
+    --panel-share: 72%;
 {% endif %}
 {% if theme_backdrop == backdrop.STARS %}
-    --drift-x: -1; --drift-y: 0; --drift-duration: 240s; --twinkle-duration: 2.6s;
+    --drift-x: -1; --drift-y: 0; --drift-duration: 240s; --twinkle-duration: 2.6s; --burst-fall: 0px;
 {% elif theme_backdrop == backdrop.EMBERS %}
-    --drift-x: 0; --drift-y: -1; --drift-duration: 26s; --twinkle-duration: 1.7s;
+    --drift-x: 0; --drift-y: -1; --drift-duration: 26s; --twinkle-duration: 1.7s; --burst-fall: -70px;
 {% elif theme_backdrop == backdrop.LEAVES %}
-    --drift-x: 1; --drift-y: 1; --drift-duration: 44s; --twinkle-duration: 5s;
+    --drift-x: 1; --drift-y: 1; --drift-duration: 44s; --twinkle-duration: 5s; --burst-fall: 80px;
 {% elif theme_backdrop == backdrop.PETALS %}
-    --drift-x: -1; --drift-y: 1; --drift-duration: 38s; --twinkle-duration: 6s;
+    --drift-x: -1; --drift-y: 1; --drift-duration: 38s; --twinkle-duration: 6s; --burst-fall: 70px;
 {% endif %}
 {% endmacro %}
 
@@ -101,6 +108,7 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
     --alive: "";
     --play-state: running;
     --arrival-duration: 620ms;
+    --burst-count: 12;
 {% endif %}
 {% endmacro %}
 
@@ -171,6 +179,17 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
   --chip-rim: transparent;
   --chip-border-width: max(1px, calc(var(--border-width) / 3));
   --frame-scale: 1;
+  --chip-art: none;
+  --chip-background-clip: border-box;
+  --panel-share: 100%;
+  --panel: color-mix(in srgb, var(--surface) var(--panel-share), transparent);
+  --panel-alt: color-mix(in srgb, var(--surface-alt) var(--panel-share), transparent);
+  --burst-art: none;
+  --burst-count: 0;
+  --burst-size: 18px;
+  --burst-reach: 90;
+  --burst-fall: 0px;
+  --burst-duration: 900ms;
 }
 
 {% for theme in appearance.themes %}
@@ -279,7 +298,7 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: 0.85re
 .progress-card {
   display: flex; flex-direction: column; gap: var(--space-2);
   text-decoration: none; color: inherit;
-  background: var(--surface); border: var(--border-width) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); border: var(--border-width) solid var(--border); border-radius: var(--radius);
   padding: var(--space-4);
 }
 .progress-card.complete { opacity: 0.7; }
@@ -303,6 +322,7 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: 0.85re
   font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.4;
   padding: 0.05rem 0.45rem; border-radius: var(--chip-radius); clip-path: var(--chip-clip);
   background: var(--idle-tint); color: var(--idle); border: var(--chip-border-width) solid var(--chip-rim);
+  border-image: var(--chip-art) 12 / 1.34 / 0.34 stretch; background-clip: var(--chip-background-clip);
   box-shadow: var(--chip-depth);
   text-decoration: none; white-space: nowrap;
 }
@@ -325,7 +345,7 @@ a.chip:hover { border-color: currentColor; }
 .status-strip .stat strong { color: var(--text); font-family: var(--font-mono); margin-right: var(--space-1); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin: 0 0 var(--space-4); font-size: 0.85rem; color: var(--text-muted); }
 .next-steps {
-  background: var(--surface); border: var(--border-width) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); border: var(--border-width) solid var(--border); border-radius: var(--radius);
   padding: var(--space-3) var(--space-4); margin: var(--frame-overhang) 0 calc(var(--space-5) + var(--frame-overhang));
 }
 .next-steps h2 { font-size: 0.95rem; margin: 0 0 var(--space-2); }
@@ -340,7 +360,7 @@ a.chip:hover { border-color: currentColor; }
   overflow-x: auto; padding-bottom: var(--space-2);
 }
 .wave {
-  background: var(--surface-alt); border-radius: var(--radius); padding: var(--space-3);
+  background: var(--panel-alt); border-radius: var(--radius); padding: var(--space-3);
   display: flex; flex-direction: column; gap: calc(var(--space-3) + var(--frame-scale) * var(--frame-overhang)); min-width: 0;
   --frame-scale: 0.68;
 }
@@ -353,7 +373,7 @@ a.chip:hover { border-color: currentColor; }
 .track-empty { color: var(--text-muted); font-size: 0.8rem; font-style: italic; margin: 0; }
 
 .item {
-  background: var(--surface); border: var(--border-width) solid var(--border); --status: var(--idle);
+  background: var(--panel); border: var(--border-width) solid var(--border); --status: var(--idle);
   border-radius: var(--radius-small); padding: var(--space-3);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
@@ -417,6 +437,24 @@ a.progress-card:hover, a.progress-card:focus-visible {
 }
 :is(.action-button, .model-picker-toggle):hover { filter: var(--frame-glow); }
 :is(.action-button, .model-picker-toggle):active { transform: translateY(2px); box-shadow: var(--button-pressed-shadow); }
+
+/* %% a click on a button or a menu throws a burst of the theme's own sparks */
+
+.burst-particle {
+  position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none;
+  width: var(--burst-size); height: var(--burst-size); margin: calc(-0.5 * var(--burst-size));
+  background: var(--burst-art) center / contain no-repeat;
+  animation: burst var(--burst-duration) cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+}
+@keyframes burst {
+  from { transform: translate(var(--burst-x), var(--burst-y)) scale(0.3); opacity: 1; }
+  70% { opacity: 1; }
+  to {
+    transform: translate(calc(var(--burst-x) + var(--burst-dx)), calc(var(--burst-y) + var(--burst-dy) + var(--burst-fall)))
+      rotate(var(--burst-spin)) scale(var(--burst-scale));
+    opacity: 0;
+  }
+}
 
 /* %% backdrop: a scene along the foot of the page and what drifts behind it */
 

@@ -16,7 +16,8 @@ site's defaults.
 | `citadel` | Gold on night slate, small-capital inscription headings, gilded scrollwork frames set with gems, studded gold buttons; a citadel on a crag with dragons, a wizard and knights under twinkling stars |
 
 Every theme but Classic is animated: cards arrive one after another, work under way
-glows, progress bars shimmer and the backdrop drifts. A viewer whose system asks for
+glows, progress bars shimmer, the backdrop drifts and a pressed button throws a burst
+of sparks, flames, leaves or petals. A viewer whose system asks for
 reduced motion sees all of it still.
 
 ## Setting the defaults and adding themes
@@ -72,17 +73,20 @@ An added theme with a built-in theme's identifier replaces it. The
       at least `3px` to show both rules.
     - `gilded`, `vine`, `lace`, `forged`: thick frames drawn as pictures in the
       theme's own colours, with ornate corners that reach past the card: gilded
-      scrollwork set with gems (`accent`, gems in `bad`), wood twined with a berried
-      braided branches (`accent` leaves), satin and lace with roses (`accent`, leaves in `good`),
+      scrollwork set with gems (`accent`, gems in `bad`), braided branches with leaves
+      and berries (`accent` leaves, berries in `bad`), satin and lace with roses (`accent`, leaves in `good`),
       and wrought iron with a molten seam and flames (`accent`). They ignore the
-      radii and `border_width`, draw buttons and menus to match, set buttons in the
-      heading font and enlarge the page's title.
+      radii, `border_width` and `chip_shape`, draw buttons, menus and chip rims to
+      match, set buttons in the heading font and enlarge the page's title.
   - `backdrop`: a scene along the foot of the page and what drifts behind it: `none`,
     `stars` (a citadel, dragons, a wizard and knights), `embers` (a volcano, a
     furnace hall and smiths), `leaves` (a forest, a great tree, an owl and stags, with falling leaves)
-    or `petals` (a garden, a gazebo, swans and cats).
+    or `petals` (a garden, a gazebo, swans and cats). With a backdrop, cards and wave
+    panels are slightly see-through, so the scene shows behind them.
   - `animated`: `true` makes cards arrive, work under way glow, progress bars shimmer
-    and the backdrop drift; `false`, the default, keeps everything still.
+    and the backdrop drift, and a press on a button or a menu throws a burst of the
+    backdrop's own sparks, flames, leaves or petals; `false`, the default, keeps
+    everything still.
   - `chip_shape`: `pill`, `rounded` (the small corner radius), `square` or `notched`
     (corners cut at an angle).
   - `ornament`: up to four characters shown before each page's eyebrow.

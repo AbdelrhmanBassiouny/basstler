@@ -14,6 +14,7 @@ import pydantic
 import pytest
 import yaml
 
+from basstler.locations import SiteTemplate
 from basstler.plan_site.hub import HubCommand, PlanHub, main
 from basstler.plan_site.hub_page import HubPage, SiteStylesheet, SiteSummary
 from basstler.plan_site.theme import (
@@ -334,6 +335,36 @@ def test_only_an_animated_theme_moves(readable_theme: SiteTheme):
     still = replace(readable_theme, style=replace(readable_theme.style, animated=False))
 
     assert theme_declaration(still) != theme_declaration(readable_theme)
+
+
+def test_only_an_animated_theme_throws_a_burst_at_a_click(readable_theme: SiteTheme):
+    still = replace(readable_theme, style=replace(readable_theme.style, animated=False))
+    assert "--burst-count" in theme_declaration(readable_theme)
+    assert "--burst-count" not in theme_declaration(still)
+
+
+def test_only_a_theme_with_a_backdrop_has_see_through_panels(
+    readable_theme: SiteTheme,
+):
+    plain = replace(
+        readable_theme, style=replace(readable_theme.style, backdrop=Backdrop.NONE)
+    )
+    assert "--panel-share" in theme_declaration(readable_theme)
+    assert "--panel-share" not in theme_declaration(plain)
+
+
+def test_a_picture_frame_theme_frames_its_chips_like_its_buttons(
+    readable_theme: SiteTheme,
+):
+    plain = replace(
+        readable_theme, style=replace(readable_theme.style, frame=Frame.FLAT)
+    )
+    assert "--chip-art" in theme_declaration(readable_theme)
+    assert "--chip-art" not in theme_declaration(plain)
+
+
+def test_every_page_carries_the_click_burst_script(hub_page_html: str):
+    assert SiteTemplate.CLICK_BURST_SCRIPT.read_text().strip() in hub_page_html
 
 
 def test_every_chip_shape_draws_its_own_outline(readable_theme: SiteTheme):

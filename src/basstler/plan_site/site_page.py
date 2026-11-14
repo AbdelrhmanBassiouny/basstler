@@ -39,5 +39,6 @@ class SitePage(TemplatePage, ABC):
             stylesheet_url=self.stylesheet_url,
             appearance=self.appearance,
             appearance_script_template=SiteTemplate.APPEARANCE_SCRIPT.name,
+            click_burst_script_template=SiteTemplate.CLICK_BURST_SCRIPT.name,
             **context,
         )
