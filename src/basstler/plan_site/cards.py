@@ -334,7 +334,7 @@ class PromotionButton:
         """
         :return: The button's text.
         """
-        return f"Open in {self.upstream_repository}"
+        return "Contribute"
 
     @property
     def reason(self) -> str:
