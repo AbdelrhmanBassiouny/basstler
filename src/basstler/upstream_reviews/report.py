@@ -7,14 +7,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from basstler.upstream_reviews.failure_logs import (
-    FailureLog,
-)
-from basstler.upstream_reviews.pull_request_models import (
+from basstler.github.pull_request_models import (
     UpstreamPullRequestSnapshot,
 )
-from basstler.upstream_reviews.review_models import (
+from basstler.github.review_models import (
     ReviewThread,
+)
+from basstler.upstream_reviews.failure_logs import (
+    FailureLog,
 )
 
 # %% report

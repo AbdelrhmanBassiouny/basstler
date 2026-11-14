@@ -2,9 +2,9 @@
 The one issue that stays open while the tests on the default branch fail.
 
 Usage:
-    "${BASSTLER_PYTHON}" -m basstler.main_failure record --repository <owner/name>
+    "${BASSTLER_PYTHON}" -m basstler.github.main_failure record --repository <owner/name>
         --run <run id> --commit <sha> --conclusion <conclusion>
-    "${BASSTLER_PYTHON}" -m basstler.main_failure show --repository <owner/name>
+    "${BASSTLER_PYTHON}" -m basstler.github.main_failure show --repository <owner/name>
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ from basstler.github.issue import (
     IssueState,
     NewIssue,
 )
-from basstler.github.workflow_run import RunJobPage, WorkflowRun
-from basstler.github_labels import GitHubLabel
-from basstler.repository import Repository
-from basstler.standard_streams import StandardStreamHandler
+from basstler.github.repository import Repository
 from basstler.github.states import CheckOutcome
+from basstler.github.tooling_labels import GitHubLabel
+from basstler.github.workflow_run import RunJobPage, WorkflowRun
+from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

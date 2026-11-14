@@ -18,24 +18,26 @@ from typing import Any
 
 import pytest
 
-from basstler.github.label import NewLabel, RepositoryLabel
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
-from basstler.github_labels import GitHubLabel
+from basstler.github.client import GitHubClient, GitHubResponse, GitHubWrite
+from basstler.github.label import NewLabel, RepositoryLabel
+from basstler.github.pull_request_record import (
+    AccountField,
+)
+from basstler.github.repository import Repository
+from basstler.github.repository_access import (
+    GitHubPath,
+    GitHubRepository,
+)
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.locations import (
     ClaudeCodeVariable,
     PluginLocation,
     PluginSkillLocation,
     ProjectLocation,
 )
-from basstler.github.client import GitHubClient, GitHubResponse, GitHubWrite
-from basstler.maintenance.board import AccountField
-from basstler.maintenance.github import (
-    GitHubPath,
-    GitHubRepository,
-)
 from basstler.plugin_root import PluginRoot
-from basstler.repository import Repository
 from basstler.setup.exceptions import CheckSetupFailedError, ForeignNotesRemoteError
 from basstler.setup.personal_notes import (
     PersonalNotesSetup,

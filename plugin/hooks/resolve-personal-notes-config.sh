@@ -431,12 +431,12 @@ UPSTREAM_REVIEWS_HELPER_MODULE="basstler.upstream_reviews.helper"
 # workflow and nothing of the project's.
 UPSTREAM_REVIEWS_ACTION_MODULE="basstler.upstream_reviews.action"
 UPSTREAM_REVIEWS_ACTION_BRANCH="basstler/upstream-reviews"
-# basstler.actions_usage: the last 24 hours of Actions runs and jobs per workflow against
+# basstler.github.actions_usage: the last 24 hours of Actions runs and jobs per workflow against
 # the budget's daily ceilings - run by session-start.sh and by the test workflow.
-ACTIONS_USAGE_MODULE="basstler.actions_usage"
-# basstler.main_failure: the one issue open while the default branch's tests fail -
+ACTIONS_USAGE_MODULE="basstler.github.actions_usage"
+# basstler.github.main_failure: the one issue open while the default branch's tests fail -
 # recorded by the test workflow, shown by session-start.sh.
-MAIN_FAILURE_MODULE="basstler.main_failure"
+MAIN_FAILURE_MODULE="basstler.github.main_failure"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.setup.dependencies"

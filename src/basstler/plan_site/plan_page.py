@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from basstler.class_property import classproperty
+from basstler.github.pull_request_state import LivePullRequests
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
@@ -20,7 +21,6 @@ from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary
-from basstler.pull_request_state import LivePullRequests
 from basstler.render_common import TemplatePage, render_markdown_to_html
 
 # %% the rendered page

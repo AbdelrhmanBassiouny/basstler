@@ -7,8 +7,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from basstler.maintenance.constants import DescriptionPattern, MaintenanceText
-from basstler.repository import Repository
+from basstler.github.constants import DescriptionPattern, MaintenanceText
+from basstler.github.repository import Repository
 
 # %% the upstream pull request a description links to
 

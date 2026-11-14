@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any
+
 from basstler.class_property import classproperty
 from basstler.standard_streams import StandardStreamHandler
 

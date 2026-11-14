@@ -11,8 +11,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from basstler.git.commands import GitCommandRunner
+from basstler.github.pull_request_source import PullRequestSource
+from basstler.github.repository import Repository
 from basstler.locations import ProjectLocation
-from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.personal_notes.branch import (
     NotesBranchWriter,
     NotesEdit,
@@ -23,8 +25,6 @@ from basstler.plan.manifest_tools import BranchIndex
 from basstler.plan.merged_items.plan_items import MergedItems
 from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.plan.size_limits import PlanFiles
-from basstler.pull_request_source import PullRequestSource
-from basstler.repository import Repository
 
 # %% every plan on a notes branch
 

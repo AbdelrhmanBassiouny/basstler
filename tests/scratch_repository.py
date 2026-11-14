@@ -22,11 +22,10 @@ from enum import StrEnum
 from pathlib import Path
 from types import ModuleType
 
-from .script_runner import BashScriptRunner
 import basstler
+from basstler.git.commands import GitCommandRunner
+from basstler.github.repository import Repository
 from basstler.locations import PackageLocation, PluginLocation
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.repository import Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import ShellConfigurationFunction
 
@@ -38,6 +37,7 @@ from .constants.environment import (
 from .constants.notes import ScratchBranch
 from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 from .plugin_manifest import PluginManifest, PluginManifestKey
+from .script_runner import BashScriptRunner
 
 
 class PackageSourceFile(StrEnum):

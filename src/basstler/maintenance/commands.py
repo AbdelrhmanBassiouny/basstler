@@ -15,27 +15,34 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
-from basstler.locations import RepositoryStateLocation
-from basstler.maintenance.board import BoardExport, UpstreamPullRequests
-from basstler.maintenance.fast_forward import fast_forward
-from basstler.maintenance.finish_summary import FinishSummary
-from basstler.maintenance.git_commands import (
+from basstler.exit_codes import StackExitCode
+from basstler.git.commands import (
     BranchAncestry,
     GitCommandRunner,
     ProposedPush,
 )
-from basstler.maintenance.github import GitHubRepository, PullRequestReader
+from basstler.git.commit_move import (
+    CommitMoveAction,
+    CommitMoveChecks,
+    ProposedCommitMove,
+)
+from basstler.git.remote_branch import RemoteBranch
+from basstler.github.client import GitHubRestClient
+from basstler.github.constants import MaintenanceNotice
+from basstler.github.repository_access import GitHubRepository, PullRequestReader
+from basstler.locations import RepositoryStateLocation
+from basstler.maintenance.board import BoardExport, UpstreamPullRequests
+from basstler.maintenance.check_overview import CheckOverview
+from basstler.maintenance.fast_forward import fast_forward
+from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.promotion import (
     PromotionSummaries,
     clear_spent_promotion_labels,
     promote,
 )
 from basstler.maintenance.promotion_context import PromotionContextReader
-from basstler.maintenance.check_overview import CheckOverview
-from basstler.maintenance.constants import MaintenanceNotice
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.upstream_action import (
@@ -46,18 +53,11 @@ from basstler.maintenance.upstream_action import (
 from basstler.maintenance.upstream_pull_request_synchronization import (
     UpstreamPullRequestSynchronization,
 )
-from basstler.stack.commit_move import (
-    CommitMoveAction,
-    CommitMoveChecks,
-    ProposedCommitMove,
-)
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
-from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.action.branch import ActionBranch
 from basstler.upstream_reviews.action.read import ActionRead
-from basstler.github.client import GitHubRestClient
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

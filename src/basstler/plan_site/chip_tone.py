@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from basstler.plan.model import ItemStatus
-from basstler.pull_request_state import LiveState
+from basstler.github.pull_request_state import LiveState
 from basstler.github.states import CombinedCheckState
+from basstler.plan.model import ItemStatus
 
 # %% chip colours
 

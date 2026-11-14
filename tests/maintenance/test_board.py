@@ -13,36 +13,34 @@ from pathlib import Path
 
 import pytest
 
-from basstler.repository import Repository
-from basstler.stack.model import PullRequest
-
-from basstler.locations import RepositoryStateLocation
-from basstler.maintenance.board import (
+from basstler.git.commands import GitCommandFailed, GitCommandRunner
+from basstler.github.credential import CredentialProvider
+from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.pull_request_description import (
+    PullRequestDescription,
+    UpstreamPullRequestLink,
+)
+from basstler.github.pull_request_record import (
     MissingPullRequestFieldError,
     PullRequestField,
     PullRequestHeadKey,
 )
+from basstler.github.repository import Repository
+from basstler.github.repository_access import PullRequestReader
 from basstler.github.states import CombinedCheckState
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
-from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
-from basstler.github.credential import CredentialProvider
-from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.github import PullRequestReader
-from basstler.maintenance.description import (
-    PullRequestDescription,
-    UpstreamPullRequestLink,
-)
+from basstler.stack.model import PullRequest
 
 from ..constants.stack import StackBranch, StackLabel
-
 from .fork import (
-    StackPullRequestNumber,
-    PullRequestHeadRepository,
     A_SESSION_LINK,
     ChecksReportedOn,
     ForkCheckout,
     HeadCommit,
     PromotionSampleText,
+    PullRequestHeadRepository,
+    StackPullRequestNumber,
     an_api_record,
     an_export,
     make_configuration,

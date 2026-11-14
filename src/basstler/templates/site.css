@@ -220,6 +220,8 @@ a.chip:hover { border-color: currentColor; }
 .hide-done .item.status-done { display: none; }
 .item h3 { font-size: 0.92rem; line-height: 1.35; margin: 0; }
 .item-identifier { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.promote-button { display: inline-block; font-size: 0.82rem; padding: var(--space-1) var(--space-3); border: 1px solid currentColor; border-radius: 6px; text-decoration: none; }
+.promote-button-disabled { opacity: 0.55; cursor: not-allowed; }
 .item-links { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: 0.78rem; }
 .dependencies { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); font-size: 0.75rem; color: var(--text-muted); }
 .drift, .access-warning { color: var(--warn); font-size: 0.8rem; }

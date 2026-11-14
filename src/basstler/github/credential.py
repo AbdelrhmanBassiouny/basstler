@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from basstler.credential_origin import CredentialOrigin
+
 # %% the commands that give access
 
 
@@ -28,24 +30,6 @@ class GitHubCommand(StrEnum):
 
 
 # %% where a token comes from
-
-
-class CredentialOrigin:
-    """
-    Where the token a GitHub request authenticates with comes from.
-    """
-
-    def describe_credential(self) -> str:
-        """
-        :return: The token, named by where it came from.
-        """
-        raise NotImplementedError
-
-    def suggest_renewal(self) -> str:
-        """
-        :return: How to replace the token with a valid one.
-        """
-        raise NotImplementedError
 
 
 class CredentialProvider(CredentialOrigin, StrEnum):

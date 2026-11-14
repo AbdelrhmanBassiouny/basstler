@@ -6,12 +6,12 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlsplit
 
+from basstler.github.repository import Repository
 from basstler.plan_site.site_repository import (
     PermissionLevel,
     SiteRepository,
     TokenFormField,
 )
-from basstler.repository import Repository
 
 SITE = SiteRepository(Repository("an-owner", "plans"))
 """

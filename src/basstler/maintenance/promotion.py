@@ -19,11 +19,13 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
-from basstler.maintenance.constants import MaintenanceText
-from basstler.maintenance.description import PullRequestDescription
-from basstler.maintenance.github import ForkPullRequests, PullRequestWriter
+from basstler.github.constants import MaintenanceText
+from basstler.github.pull_request_description import PullRequestDescription
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.repository_access import ForkPullRequests, PullRequestWriter
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.stack.label_write import LabelWrite
 from basstler.stack.model import BranchStatus, Stack
 from basstler.stack.promotion_link import PromotionLink

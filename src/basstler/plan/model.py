@@ -18,8 +18,8 @@ from typing import Any
 
 import yaml
 
+from basstler.github.repository import Repository
 from basstler.locations import ProjectLocation
-from basstler.repository import Repository
 
 
 class ItemStatus(StrEnum):

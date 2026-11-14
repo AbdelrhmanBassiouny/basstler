@@ -5,7 +5,6 @@ Patching one item's fields in a manifest's raw text.
 from __future__ import annotations
 
 import itertools
-
 from dataclasses import dataclass
 from typing import Any
 

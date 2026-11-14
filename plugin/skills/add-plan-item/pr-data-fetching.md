@@ -69,8 +69,8 @@ response as-is is what the rejection above catches.
 
 `labels` carries one thing this codebase reads. A pull request merged
 out-of-band never gets `merged_at` set, and this repo's convention is to add
-a `"merged"` label by hand in that case - see `github_labels.py`'s
-`GitHubLabel` and `pull_request_state.py`'s `was_merged`. That label is a fallback for a real merge
+a `"merged"` label by hand in that case - see `github/tooling_labels.py`'s
+`GitHubLabel` and `github/pull_request_state.py`'s `was_merged`. That label is a fallback for a real merge
 GitHub never recorded, not a substitute for `merged_at` - only pull requests
 that happen to carry it survive a fetch that dropped the timestamp.
 

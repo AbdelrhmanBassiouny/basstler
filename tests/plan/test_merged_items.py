@@ -6,8 +6,8 @@ its pull request merged.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from http import HTTPStatus
-from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -15,6 +15,12 @@ import pytest
 from basstler.exit_codes import ManifestToolsExitCode
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
+from basstler.github.pull_request_source import (
+    GitHubPullRequestSource,
+    PullRequestSource,
+)
+from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.github.repository import PullRequestReference, Repository
 from basstler.locations import ProjectLocation
 from basstler.plan.merged_items.every_plan import (
     MergedItemsInEveryPlan,
@@ -23,13 +29,10 @@ from basstler.plan.merged_items.every_plan import (
 )
 from basstler.plan.merged_items.plan_items import MergedItems
 from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
-from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
-from basstler.repository import PullRequestReference, Repository
 
-from ..plan_dataset import LandedItemsPlan
 from ..github.pull_request_api import refusal
 from ..github.recorded_client import RecordedGitHubClient
+from ..plan_dataset import LandedItemsPlan
 from ..recorded_pull_requests import RecordedPullRequestSource
 
 # %% the pull requests GitHub reports

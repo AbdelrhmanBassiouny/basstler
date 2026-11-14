@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 from basstler.command_line import Command
 
 # %% the name a command is invoked by

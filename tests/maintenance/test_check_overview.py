@@ -8,12 +8,11 @@ import argparse
 
 import pytest
 
+from basstler.github.states import CombinedCheckState
 from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.commands import ChecksCommand
-from basstler.github.states import CombinedCheckState
 
 from ..constants.stack import StackBranch
-
 from .fork import (
     UPSTREAM_BASE,
     ForkCheckout,

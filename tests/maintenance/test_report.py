@@ -13,16 +13,7 @@ import pytest
 
 from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import StackExitCode
-from basstler.repository import Repository
-from basstler.stack.model import (
-    IntegrationStrategy,
-    PullRequest,
-    SkippedPullRequest,
-    SkipReason,
-    Stack,
-)
-from basstler.stack.settings import Configuration
-
+from basstler.github.repository import Repository
 from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import BoardExport
 from basstler.maintenance.commands import (
@@ -42,24 +33,31 @@ from basstler.maintenance.restack_steps import (
     BranchOutcome,
     RestackOutcome,
 )
+from basstler.stack.model import (
+    IntegrationStrategy,
+    PullRequest,
+    SkippedPullRequest,
+    SkipReason,
+    Stack,
+)
+from basstler.stack.settings import Configuration
 
 from ..constants.stack import RemoteName, StackBranch
-
 from .fork import (
-    StackPullRequestNumber,
-    PullRequestHeadRepository,
     UPSTREAM_BASE,
-    make_configuration,
     ForkCheckout,
+    PullRequestHeadRepository,
+    StackPullRequestNumber,
+    a_parent_and_child,
     a_stack,
     an_api_record,
     an_export,
-    a_parent_and_child,
+    make_configuration,
     the_board,
 )
 from .recorded_fork import (
-    RecordingPullRequests,
     AlreadyResolvedPass,
+    RecordingPullRequests,
     run_maintenance,
 )
 

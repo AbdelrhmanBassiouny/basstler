@@ -8,11 +8,9 @@ from dataclasses import dataclass
 from http import HTTPStatus
 
 from basstler.class_property import classproperty
-from basstler.exceptions import DataclassException
+from basstler.credential_origin import CredentialOrigin
+from basstler.exceptions import DataclassException, ExternalCallFailed
 from basstler.exit_codes import CommandFailure, StackExitCode
-from basstler.github.credential import CredentialOrigin
-from basstler.maintenance.exceptions import ExternalCallFailed
-
 
 REDIRECTION_STATUSES = range(HTTPStatus.MULTIPLE_CHOICES, HTTPStatus.BAD_REQUEST)
 """

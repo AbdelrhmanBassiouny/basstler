@@ -9,7 +9,6 @@ from enum import StrEnum
 
 from basstler.locations import PackageLocation
 
-
 # %% official licence text
 
 

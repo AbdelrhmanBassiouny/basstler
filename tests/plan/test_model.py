@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from basstler.github.repository import Repository
 from basstler.locations import ProjectLocation
 from basstler.plan import model
 from basstler.plan.model import (
@@ -19,12 +20,11 @@ from basstler.plan.model import (
     PlanItem,
     PlanManifest,
 )
-from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
-from .concurrent_edits import PLAN_IDENTIFIER
-from ..fixture_plans import ForeignItemId, FixturePlanId, fixture_item, fixture_manifest
+from ..fixture_plans import FixturePlanId, ForeignItemId, fixture_item, fixture_manifest
 from ..manifest_builders import manifest_item, minimal_plan
+from .concurrent_edits import PLAN_IDENTIFIER
 
 # %% stored spelling
 

@@ -10,17 +10,24 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
-from basstler.maintenance.board import PullRequestField
 from basstler.github.client import (
     GitHubFullClient,
     GitHubResponse,
     GitHubRestClient,
 )
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.github import GitHubRepository
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import (
+    ForkLineage,
+    LivePullRequests,
+    PullRequestRecord,
+)
+from basstler.github.repository import PullRequestReference, Repository
+from basstler.github.repository_access import GitHubRepository
+from basstler.json_model import ValidatedJSONModel
 from basstler.plan.dependencies import DependencyResolver
-from basstler.pull_request_state import LivePullRequests, PullRequestRecord
-from basstler.repository import PullRequestReference, Repository
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -32,6 +39,55 @@ READ_ACCESS_STATUSES = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN})
 """
 What GitHub answers a token that is not granted a repository.
 """
+
+# %% repository details
+
+
+class UpstreamDetails(ValidatedJSONModel):
+    """
+    The repository a fork was forked from, as a repository's details name it.
+    """
+
+    full_name: str
+    """
+    The upstream's ``owner/name``.
+    """
+
+    default_branch: str
+    """
+    The upstream's default branch.
+    """
+
+
+class RepositoryDetails(ValidatedJSONModel):
+    """
+    What a repository's details say about the repository's own default branch and what
+    it was forked from.
+    """
+
+    default_branch: str
+    """
+    The repository's default branch.
+    """
+
+    parent: UpstreamDetails | None = None
+    """
+    What it was forked from, absent unless it is a fork.
+    """
+
+    @property
+    def lineage(self) -> ForkLineage | None:
+        """
+        :return: What the repository was forked from, ``None`` unless it is a fork.
+        """
+        if self.parent is None:
+            return None
+        return ForkLineage(
+            upstream_repository=Repository.parse(self.parent.full_name),
+            upstream_default_branch=self.parent.default_branch,
+            fork_default_branch=self.default_branch,
+        )
+
 
 # %% live pull request state
 
@@ -64,6 +120,14 @@ class PullRequestSource(ABC):
         """
         return None
 
+    def fork_lineage_of(self, repository: Repository) -> ForkLineage | None:
+        """
+        :param repository: A repository that can be read.
+        :return: What it was forked from, or ``None`` if it is not a fork, or the source
+            cannot tell.
+        """
+        return None
+
     def live_pull_requests_of(
         self, dependencies: DependencyResolver
     ) -> LivePullRequests:
@@ -86,6 +150,9 @@ class PullRequestSource(ABC):
             if failure is not None:
                 live_pull_requests.read_failures[reference.repository] = failure
                 continue
+            lineage = self.fork_lineage_of(reference.repository)
+            if lineage is not None:
+                live_pull_requests.fork_lineages[str(reference.repository)] = lineage
             record = self.pull_request(reference)
             if record is not None:
                 live_pull_requests.pull_requests_by_repository.setdefault(
@@ -173,6 +240,13 @@ class GitHubPullRequestSource(PullRequestSource):
                 f"{failure.error_message()}"
             )
         return failure
+
+    def fork_lineage_of(self, repository: Repository) -> ForkLineage | None:
+        if self.read_failure_of(repository) is not None:
+            return None
+        return RepositoryDetails.from_json(
+            self.repository_details[repository].body
+        ).lineage
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)

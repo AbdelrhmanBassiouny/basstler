@@ -6,10 +6,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import LiveState, PullRequestState
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.plan_site.live_state_display import LiveStateDisplay
-from basstler.pull_request_state import LiveState, PullRequestState
 
 # %% the vocabulary
 

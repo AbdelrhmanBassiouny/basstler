@@ -5,28 +5,26 @@ labels, comments and its description.
 
 from __future__ import annotations
 
-from basstler.maintenance.constants import MergeableState
+from basstler.github.constants import MergeableState
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.restack_steps import RestackOutcome
 
 from ..constants.stack import StackBranch, StackLabel
-
 from .fork import (
-    StackPullRequestNumber,
-    PromotionSampleText,
-    FixtureFile,
     A_SESSION_LINK,
-    make_configuration,
+    FixtureFile,
     ForkCheckout,
-    a_stack,
+    PromotionSampleText,
+    StackPullRequestNumber,
     a_parent_and_child,
+    a_stack,
+    make_configuration,
     the_board,
 )
 from .recorded_fork import (
     RecordedLabelWrite,
     RecordingPullRequests,
 )
-
 
 # %% reporting a branch back to its owner
 

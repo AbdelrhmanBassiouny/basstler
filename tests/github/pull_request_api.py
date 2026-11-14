@@ -13,10 +13,12 @@ from typing import Any
 from basstler.github.client import HttpMethod
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.board import PullRequestField
-from basstler.maintenance.github import GitHubRepository, PullRequestListState
-from basstler.pull_request_state import PullRequestState
-from basstler.repository import PullRequestReference, Repository
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.pull_request_state import PullRequestState
+from basstler.github.repository import PullRequestReference, Repository
+from basstler.github.repository_access import GitHubRepository, PullRequestListState
 
 from ..constants.paths import DatasetLocation
 
@@ -40,6 +42,8 @@ def api_pull_request(
         PullRequestField.MERGED_AT: None,
         PullRequestField.LABELS: [],
         PullRequestField.HTML_URL: reference.url,
+        PullRequestField.BASE: "main",
+        PullRequestField.TITLE: f"A pull request #{reference.number}",
     }
     record.update(overrides or {})
     return {

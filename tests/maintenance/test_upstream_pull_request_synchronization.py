@@ -7,19 +7,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from basstler.maintenance.description import (
+from basstler.github.pull_request_description import (
     PullRequestDescription,
     UpstreamPullRequestLink,
 )
 from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronization,
     UpstreamPullRequestSynchronizationAction,
     UpstreamPullRequestSynchronizationChange,
-    UpstreamPullRequestSynchronization,
 )
 from basstler.stack.model import PullRequest
 
 from ..constants.stack import StackBranch, StackLabel
-
 from .fork import (
     ForkCheckout,
     PromotionSampleText,

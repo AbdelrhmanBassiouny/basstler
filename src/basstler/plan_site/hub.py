@@ -36,13 +36,13 @@ from typing import Any
 import yaml
 
 from basstler.class_property import classproperty
-from basstler.plan_site.plan import Item
+from basstler.git.commands import GitCommandRunner
+from basstler.git.remote_branch import RemoteBranch
+from basstler.github.repository import GitHubAddress, Repository
 from basstler.locations import ProjectLocation
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.exceptions import RegistryUnreadableError
+from basstler.plan_site.plan import Item
 from basstler.plan_site.workflows import PlanSiteSecret
-from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.standard_streams import StandardStreamHandler
 

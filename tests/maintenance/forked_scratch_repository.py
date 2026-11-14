@@ -17,8 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.github.repository import Repository
 from basstler.locations import ProjectLocation
-from basstler.repository import Repository
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import PersonalNotesPath

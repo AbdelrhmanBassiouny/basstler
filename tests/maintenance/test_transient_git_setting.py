@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-from basstler.maintenance.git_commands import TransientGitSetting
+from basstler.git.commands import TransientGitSetting
 
 from ..scratch_repository import ScratchRepository
 

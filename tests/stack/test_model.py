@@ -8,15 +8,16 @@ none of these touch git or the network.
 
 from __future__ import annotations
 
-from collections.abc import Container
-
 import json
+from collections.abc import Container
 from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 
+from basstler.github.states import CombinedCheckState
 from basstler.locations import RepositoryStateLocation
+from basstler.stack.exceptions import BaseBranchScopeError
 from basstler.stack.model import (
     BoardKey,
     BranchStatus,
@@ -25,17 +26,14 @@ from basstler.stack.model import (
     RestackPlanEntry,
     Stack,
 )
-from basstler.stack.exceptions import BaseBranchScopeError
-from basstler.github.states import CombinedCheckState
 
 from ..constants.stack import StackBranch, StackLabel
-
 from .dataset import (
     StackRepository,
     StackSampleText,
     UpstreamPullRequestNumber,
-    make_configuration,
     build,
+    make_configuration,
 )
 
 # %% deriving a branch status
