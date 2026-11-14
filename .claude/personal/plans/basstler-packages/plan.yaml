@@ -54,7 +54,7 @@ items:
     of stack.configuration upstream_reviews reads into github; maintenance->upstream_reviews.action
     inverted so only stack depends on reviews; plugin_root into core (#76 touches it). Split
     locations, environment and exceptions per distribution, the rule becoming "once, in its
-    own package''s locations". Ends with `code-rules crossings` empty; CI''s new-crossings
+    own package''s locations". Ends with no boundary crossing left; CI''s new-crossings
     then keeps it so.
 
     '
