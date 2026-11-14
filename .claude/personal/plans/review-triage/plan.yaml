@@ -37,3 +37,16 @@ items:
     matcher with rules and findings; calls resolved by name, through the class hierarchy,
     and through declared attribute and parameter types) and a module-move rename source.
     CRAM #967: 123 of 154 files mechanical; #210: 194 of 246.'
+
+- id: viewed-marking-workflow
+  title: Mark files viewed from a repository's Actions, for cloud sessions
+  track: triage
+  depends_on: [mechanical-file-triage]
+  status: in progress
+  branch: ccr-37402cb7-cls5ht-viewed-workflow
+  session: https://claude.ai/code/session_01JxHGiQ6QwrU1DCxnD3WaYc
+  pull_request_number: 215
+  notes: 'Draft #215, stacked on #213: request-mark-viewed dispatches a dispatch-only
+    workflow calling a reusable one that runs mark-viewed with the user''s
+    REVIEW_TRIAGE_VIEWER_TOKEN, refusing a run started by anyone else; SETUP section 4
+    offers it beside running mark-viewed where gh is logged in.'
