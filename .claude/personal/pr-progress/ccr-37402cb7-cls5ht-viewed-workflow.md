@@ -9,6 +9,7 @@ Done:
   FilesNotMarkedViewed names both routes + README; 2340 tests green at c6f8ca4e
 
 Next:
-- User: run set-up-mark-viewed --on-every-pull-request, store the token
+- #215 now carries basstler's own every-PR mark-viewed.yml (5836561e); on merge, the user
+  creates and stores REVIEW_TRIAGE_VIEWER_TOKEN, then re-runs set-up-mark-viewed
 - Follow-up suggested: plan site onto github.token_form (needs a test change)
 - Possible: path literals following a moved directory (#210 locations.py)
