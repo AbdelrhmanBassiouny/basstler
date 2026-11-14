@@ -16,7 +16,7 @@
 {% if step.command %}
 
    ```bash
-   {{ step.command }}
+   {{ step.command | indent(3) }}
    ```
 
    Or in the browser:

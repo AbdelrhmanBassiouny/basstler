@@ -5,17 +5,20 @@ The repository the user owns that builds and serves the plan site.
 from __future__ import annotations
 
 import shlex
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import urlencode, urlsplit
 
 from basstler.class_property import classproperty
+from basstler.github import token_form
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.workflows import (
     GitHubCommandLineOption,
     PlanSiteJob,
+    PlanSiteSecret,
     WorkflowFile,
 )
 from basstler.repository import GitHubAddress, Repository
@@ -163,6 +166,23 @@ class SiteRepository:
             }
         )
         return f"{self.token_page}?{query}"
+
+    def token_use(self, stored_on: Sequence[Repository]) -> token_form.TokenUse:
+        """
+        :param stored_on: The repositories whose Actions start the build.
+        :return: What the token starting the build reaches, and where it is stored.
+        """
+        return token_form.TokenUse(
+            f"starts the plan site build in {self.repository.full_name}",
+            (self.repository,),
+            {
+                token_form.RepositoryPermission.ACTIONS: (
+                    token_form.PermissionLevel.WRITE
+                )
+            },
+            PlanSiteSecret.TOKEN,
+            tuple(stored_on),
+        )
 
     @property
     def site_url(self) -> str:

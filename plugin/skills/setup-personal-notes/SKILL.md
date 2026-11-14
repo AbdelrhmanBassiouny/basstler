@@ -262,6 +262,14 @@ confirm it. Otherwise ask for it as `<owner>/<name>`, offering
 
 The site builds with basstler's latest release, so it stays current with no re-run.
 
+Ask the user too whether this repository's Actions should mark pull requests'
+mechanical files viewed for them. If so, add
+`--mark-viewed-on <owner>/<name>`, naming the repository the pull requests are opened
+on (this repository's parent for a fork, else this repository). Where the site and
+that repository share an owner, publication then asks for one token for both jobs and
+prints the line storing it as both secrets; otherwise each job gets its own token
+steps. Relay the mark-viewed part of the report as well.
+
 It reads the site repository's and this repository's workflow runs first and
 writes nothing until it can. It authenticates with `GH_TOKEN` or
 `GITHUB_TOKEN`, else with `gh`'s login. In a cloud session a read of the site

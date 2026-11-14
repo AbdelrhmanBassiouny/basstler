@@ -282,6 +282,19 @@ class ReviewTriageLocation(PathEnumeration):
     """
 
 
+class GitHubTemplate(PathEnumeration):
+    """
+    The templates the GitHub client's models render.
+    """
+
+    SHARED_TOKEN_STORE_COMMAND = (
+        PackageLocation.TEMPLATES.value / "shared_token_store_command.sh"
+    )
+    """
+    The command storing one token, read once at a hidden prompt, as several secrets.
+    """
+
+
 class PluginLocation(PathEnumeration):
     """
     The plugin's files this package runs, relative to the plugin's root.

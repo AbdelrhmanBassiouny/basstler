@@ -27,9 +27,10 @@ from basstler.github.file_proposal import (
 )
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.token_form import (
-    FineGrainedTokenForm,
     PermissionLevel,
     RepositoryPermission,
+    SharedToken,
+    TokenUse,
 )
 from basstler.json_model import ValidatedJSONModel
 from basstler.locations import ReviewTriageLocation, WorkflowLocation
@@ -228,6 +229,12 @@ class MarkViewedSetup(TemplatePage):
     """
     Whether the workflow also runs for every pull request opened or updated on the
     workflow repository, besides when started.
+    """
+
+    shared_uses: tuple[TokenUse, ...] = ()
+    """
+    Other jobs of basstler's the person's token may do too; those on the same owner's
+    repositories share the token that marks files viewed.
     """
 
     steps: list[SetupStep] = field(default_factory=list)
@@ -583,7 +590,7 @@ class MarkViewedSetup(TemplatePage):
         :param details: The workflow repository.
         """
         secret = ReviewTriageSecret.VIEWER_TOKEN
-        description = f"{secret} stored on {self.workflow_repository.full_name}"
+        description = self.secret_description
         stored = client.attempt_get(
             f"{self.workflow_repository.api_path}/actions/secrets/{secret}"
         )
@@ -597,45 +604,86 @@ class MarkViewedSetup(TemplatePage):
                 description, SetupState.UNREADABLE, stored.failure.error_message()
             )
         )
-        self.user_steps.extend(self.token_steps(details))
+        self.user_steps.extend(
+            self.token_steps(details, unread=not stored.is_not_found)
+        )
 
-    def token_steps(self, details: RepositoryDetails) -> tuple[UserStep, UserStep]:
+    @property
+    def secret_description(self) -> str:
+        """
+        The step storing the token on the workflow repository.
+        """
+        return (
+            f"{ReviewTriageSecret.VIEWER_TOKEN} stored on "
+            f"{self.workflow_repository.full_name}"
+        )
+
+    @property
+    def token_left(self) -> bool:
+        """
+        Whether :meth:`run` left creating and storing the token to the user.
+        """
+        return any(
+            step.description == self.secret_description
+            and step.state != SetupState.ALREADY_DONE
+            for step in self.steps
+        )
+
+    def token_use(self, details: RepositoryDetails) -> TokenUse:
         """
         :param details: The workflow repository.
-        :return: Creating the token and storing it on the workflow repository.
+        :return: What the token marking files viewed reaches, and where it is stored.
         """
         target = self.target_repository(details)
-        form = FineGrainedTokenForm(
-            "basstler mark viewed",
-            f"Marks mechanical files of {target.full_name}'s pull requests viewed",
-            target.owner,
+        return TokenUse(
+            f"marks mechanical files of {target.full_name}'s pull requests viewed",
+            (target,),
             {
                 RepositoryPermission.PULL_REQUESTS: PermissionLevel.WRITE,
                 RepositoryPermission.CONTENTS: PermissionLevel.READ,
             },
+            ReviewTriageSecret.VIEWER_TOKEN,
+            (self.workflow_repository,),
         )
-        secret = ReviewTriageSecret.VIEWER_TOKEN
+
+    def token_steps(
+        self, details: RepositoryDetails, unread: bool = False
+    ) -> tuple[UserStep, UserStep]:
+        """
+        :param details: The workflow repository.
+        :param unread: Whether the secret could not be read, so it may be stored
+            already.
+        :return: Creating the token, for every job of :attr:`shared_uses` it can share,
+            and storing it as each of their secrets.
+        """
+        token = SharedToken.joining(
+            "basstler", self.token_use(details), self.shared_uses
+        )
+        condition = "unless it is stored already, " if unread else ""
+        stored = " and ".join(
+            f"{entry.secret} on {entry.repository.full_name}" for entry in token.secrets
+        )
         return (
             UserStep(
-                f"create a token that may mark {target.full_name}'s files viewed",
+                f"{condition}create one token that "
+                + " and ".join(use.purpose for use in token.uses),
                 (
-                    f"Open {form.url} - its name, owner and permissions are filled in.",
+                    f"Open {token.form.url} - its name, owner and permissions are "
+                    "filled in.",
                     "Under Repository access, choose Only select repositories and "
-                    f"select {target.full_name} alone.",
+                    f"select {token.selection} alone.",
                     "Give it an expiry, click Generate token and copy it; GitHub shows "
                     "it once.",
                 ),
             ),
             UserStep(
-                f"store the token as {secret} on {self.workflow_repository.full_name}",
-                (
-                    f"Open {self.workflow_repository.new_actions_secret_url}.",
-                    f"Set the name to {secret}, paste the token, then click Add secret.",
+                f"{condition}store the token as {stored}",
+                tuple(
+                    f"Open {entry.repository.new_actions_secret_url}, set the name to "
+                    f"{entry.secret}, paste the token, then click Add secret."
+                    for entry in token.secrets
                 ),
-                command=(
-                    f"gh secret set {secret} --repo "
-                    f"{self.workflow_repository.full_name}"
-                ),
+                command=token.store_command,
             ),
         )
 

@@ -114,6 +114,17 @@ It then lists the steps only you can take, with links that fill the forms in:
    command opens it, or, where it may not push, links GitHub's new-file page with the
    workflow filled in.
 
+Where the secret cannot be read, as from a cloud session, the two token steps say to
+skip them if it is stored already.
+
+**One token for the plan site and this:** publishing the plan site with
+`--mark-viewed-on <owner>/<name>` also sets this workflow up on the notes repository,
+for that repository's pull requests. Where the plan site's repository and the pull
+requests' repository have the same owner, it asks for one fine-grained token with both
+jobs' permissions and stores it as both `PLAN_SITE_TOKEN` and
+`REVIEW_TRIAGE_VIEWER_TOKEN`. A fine-grained token reaches one owner's repositories
+only, so where the owners differ each job keeps a token of its own.
+
 Run `set-up-mark-viewed` again afterwards: it checks every step and says when nothing
 is left. `--workflow-repository` names another repository than the checkout's `origin`,
 and `--repository` names the pull requests' repository when it is not the fork's parent.

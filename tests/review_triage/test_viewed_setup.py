@@ -20,7 +20,7 @@ from basstler.github.client import (
 from basstler.github.file_proposal import FileUpdate, FileWrite, NewBranch
 from basstler.github.pull_request import NewPullRequest
 from basstler.github.repository_details import RepositoryDetails
-from basstler.github.token_form import RepositoryPermission
+from basstler.github.token_form import PermissionLevel, RepositoryPermission, TokenUse
 from basstler.locations import WorkflowLocation
 from basstler.repository import BASSTLER_REPOSITORY, Repository
 from basstler.review_triage.exceptions import MarkViewedWorkflowRefused
@@ -427,3 +427,65 @@ def test_a_fork_cannot_run_on_its_parent_s_pull_requests():
     assert [
         step.state for step in setup.steps if UPSTREAM.full_name in step.reason
     ] == [SetupState.LEFT_TO_USER]
+
+
+# %% one token for several jobs
+
+
+def shared_use(owner: str) -> TokenUse:
+    """
+    :param owner: The owner of the repository the other job reaches.
+    :return: Another job of basstler's, starting a workflow there.
+    """
+    return TokenUse(
+        "starts a build",
+        (Repository(owner, "site"),),
+        {RepositoryPermission.ACTIONS: PermissionLevel.WRITE},
+        "BUILD_TOKEN",
+        (FORK,),
+    )
+
+
+def test_a_job_on_the_pull_requests_owner_shares_the_token():
+    other = shared_use(UPSTREAM.owner)
+    setup = MarkViewedSetup(FORK, shared_uses=(other,))
+    setup.run(answers(SECRET=None))
+    create, store = setup.user_steps
+    assert (
+        f"{RepositoryPermission.ACTIONS}={PermissionLevel.WRITE}"
+        in create.browser_steps[0],
+        store.command.count("gh secret set"),
+    ) == (True, 2)
+
+
+def test_a_job_on_another_owner_s_repositories_gets_a_token_of_its_own():
+    alone = MarkViewedSetup(FORK)
+    alone.run(answers(SECRET=None))
+    shared = MarkViewedSetup(FORK, shared_uses=(shared_use("someone-else"),))
+    shared.run(answers(SECRET=None))
+    assert shared.user_steps == alone.user_steps
+
+
+def test_a_secret_that_may_be_stored_already_says_its_token_steps_may_be_skipped():
+    missing = MarkViewedSetup(FORK)
+    missing.run(answers(SECRET=None))
+    client = answers()
+    client.forbidden.add(Resource.SECRET)
+    unread = MarkViewedSetup(FORK)
+    unread.run(client)
+    assert [
+        (left.description == right.description)
+        for left, right in zip(missing.user_steps, unread.user_steps, strict=True)
+    ] == [False, False]
+
+
+def test_a_token_left_to_the_user_is_reported_as_left():
+    setup = MarkViewedSetup(FORK)
+    setup.run(answers(SECRET=None))
+    assert setup.token_left
+
+
+def test_a_stored_token_is_not_reported_as_left():
+    setup = MarkViewedSetup(FORK)
+    setup.run(answers())
+    assert not setup.token_left

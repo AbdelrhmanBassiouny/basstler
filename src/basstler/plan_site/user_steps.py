@@ -30,6 +30,7 @@ from basstler.github.client import (
     GitHubClient,
 )
 from basstler.github.exceptions import GitHubCallFailed
+from basstler.github.token_form import SharedToken, TokenUse
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -173,6 +174,25 @@ class UserSteps:
     Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
     """
 
+    shared_uses: tuple[TokenUse, ...] = ()
+    """
+    Other jobs of basstler's the person's token may do too; those on the site owner's
+    repositories share the token that starts the build.
+    """
+
+    @property
+    def shared_token(self) -> SharedToken | None:
+        """
+        The token starting the build and doing the jobs of :attr:`shared_uses` it can
+        share, ``None`` when it shares none.
+        """
+        token = SharedToken.joining(
+            "basstler",
+            self.site.token_use([Repository.parse(name) for name in self.registered]),
+            self.shared_uses,
+        )
+        return token if len(token.uses) > 1 else None
+
     def pending(
         self, step: UserStep, latest_run: ListedRun | None = None
     ) -> PendingStep:
@@ -230,7 +250,48 @@ class UserSteps:
                 latest_run,
             ),
         }
+        shared = self.shared_token
+        if shared is not None:
+            steps |= self.shared_token_steps(shared, latest_run)
         return steps[step]
+
+    def shared_token_steps(
+        self, token: SharedToken, latest_run: ListedRun | None
+    ) -> dict[UserStep, PendingStep]:
+        """
+        :param token: The token shared with other jobs.
+        :param latest_run: The latest run of the dispatch workflow, ``None`` when it
+            has not run.
+        :return: Creating that token and storing it as every job's secret.
+        """
+        return {
+            UserStep.CREATE_TOKEN: PendingStep(
+                UserStep.CREATE_TOKEN,
+                None,
+                (
+                    f"Open {token.form.url} - its name, owner and permissions are "
+                    "filled in. One token "
+                    + " and ".join(use.purpose for use in token.uses)
+                    + ".",
+                    "Under Repository access, choose Only select repositories and "
+                    f"select {token.selection} alone.",
+                    "Click Generate token and copy the token now; GitHub shows it "
+                    "once.",
+                ),
+                latest_run,
+            ),
+            UserStep.STORE_TOKEN: PendingStep(
+                UserStep.STORE_TOKEN,
+                token.store_command,
+                tuple(
+                    f"Open {entry.repository.new_actions_secret_url}, set the name to "
+                    f"{entry.secret}, paste the token as the secret, then click Add "
+                    "secret."
+                    for entry in token.secrets
+                ),
+                latest_run,
+            ),
+        }
 
     @property
     def store_token_command(self) -> str:
