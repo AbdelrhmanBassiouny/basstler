@@ -22,11 +22,12 @@ from basstler.review_triage.pull_request import (
     CommitRange,
     PullRequestChanges,
     PullRequestReader,
+    TriagedPullRequest,
 )
 from basstler.review_triage.renames import Rename, RenameMap
 
 from ..scratch_repository import ScratchRepository
-from .samples import DescriptionSample, PullRequestSample
+from .samples import DescriptionSample, PullRequestSample, SampleTrees
 
 # %% stand-ins for GitHub
 
@@ -109,6 +110,24 @@ def commit_trees(
     scratch_repository.commit_everything("head")
     return CommitRange(
         scratch_repository.git, base_commit, scratch_repository.git.commit_at("HEAD")
+    )
+
+
+def committed_pull_request(
+    scratch_repository: ScratchRepository, base: SampleTrees, head: SampleTrees
+) -> PullRequestChanges:
+    """
+    :param scratch_repository: The repository to commit in.
+    :param base: The sample's base tree.
+    :param head: The sample's head tree.
+    :return: The sample pull request between the two trees, once committed.
+    """
+    commits = commit_trees(scratch_repository, base.files(), head.files())
+    payload = PullRequestSample.PAYLOAD.payload()
+    payload["base"]["sha"] = commits.base_commit
+    payload["head"]["sha"] = commits.head_commit
+    return PullRequestChanges(
+        TriagedPullRequest.from_json(payload), commits, commits.changes()
     )
 
 

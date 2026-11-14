@@ -38,7 +38,9 @@ class FileSample(StrEnum):
     KEYWORD_ARGUMENTS_SWAPPED = "keyword-arguments-swapped"
     KEYWORD_ARGUMENTS_UNKNOWN_CALLEE = "keyword-arguments-unknown-callee"
     KEYWORD_ONLY_PARAMETERS = "keyword-only-parameters"
+    RELATIVE_IMPORT_MOVED = "relative-import-moved"
     STRING_LITERAL_RENAMED = "string-literal-renamed"
+    TEMPLATE_RENAMED = "template-renamed"
 
     @property
     def directory(self) -> Path:
@@ -160,3 +162,28 @@ class ModuleMoveSample(SampleTrees):
     @classproperty
     def directory_name(cls) -> str:
         return "module-move"
+
+
+# %% the definition move
+
+
+class DefinitionMoveSample(SampleTrees):
+    """
+    A pull request moving classes out of a module that stays, into one that exists and
+    one it adds, and importing them from there.
+    """
+
+    BASE_TREE = "base"
+    HEAD_TREE = "head"
+
+    @classproperty
+    def directory_name(cls) -> str:
+        return "definition-move"
+
+
+TEMPLATE_REINDENTED = (
+    DatasetLocation.REVIEW_TRIAGE / "template-renamed" / "reindented.py.jinja"
+)
+"""
+The renamed template's head version, its renamed line also indented.
+"""

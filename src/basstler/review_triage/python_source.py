@@ -153,6 +153,12 @@ class PythonSource:
     The file's content.
     """
 
+    package: tuple[str, ...] = ()
+    """
+    The names of the directories holding the file, from the repository's root; empty
+    when unknown, which leaves relative imports unresolved.
+    """
+
     code_trees: dict[RenameMap, ast.Module] = field(
         default_factory=dict, compare=False, repr=False
     )
@@ -251,15 +257,55 @@ class PythonSource:
                     for alias in node.names
                 }
             elif isinstance(node, ast.ImportFrom) and node.module != FUTURE_MODULE:
-                module = "." * node.level + renamed(node.module or "")
+                module = self.imported_module(node)
                 bindings |= {
                     ImportBinding(
                         renamed(alias.asname or alias.name),
-                        f"{module}.{renamed(alias.name)}",
+                        renamed(f"{module}.{alias.name}"),
                     )
                     for alias in node.names
                 }
         return ImportBindings(frozenset(bindings))
+
+    def imported_module(self, node: ast.ImportFrom) -> str:
+        """
+        :param node: A ``from`` import of the file.
+        :return: The dotted path of the module it imports from, resolved against
+            :attr:`package` when it is relative and reaches no higher than its root.
+        """
+        relative = "." * node.level + (node.module or "")
+        parents = node.level - 1
+        if node.level == 0 or not self.package or parents > len(self.package):
+            return relative
+        components = list(self.package[: len(self.package) - parents])
+        if node.module:
+            components.append(node.module)
+        return ".".join(components)
+
+    @cached_property
+    def defined_names(self) -> frozenset[str]:
+        """
+        The names the file's top-level functions, classes and assignments define.
+        """
+        names: set[str] = set()
+        for statement in self.tree.body:
+            if isinstance(
+                statement, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+            ):
+                names.add(statement.name)
+            elif isinstance(statement, ast.Assign | ast.AnnAssign | ast.AugAssign):
+                targets = (
+                    statement.targets
+                    if isinstance(statement, ast.Assign)
+                    else [statement.target]
+                )
+                names |= {
+                    node.id
+                    for target in targets
+                    for node in ast.walk(target)
+                    if isinstance(node, ast.Name)
+                }
+        return frozenset(names)
 
     @cached_property
     def import_bindings(self) -> ImportBindings:

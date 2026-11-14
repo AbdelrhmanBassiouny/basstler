@@ -96,3 +96,30 @@ def test_an_original_identifier_is_found_from_its_replacement():
     The identifier the base commit used is found from the one replacing it.
     """
     assert RenameMap((DETECTED,)).original_identifier(DETECTED.new) == DETECTED.old
+
+
+# %% file paths
+
+MOVED_FILE = Rename(
+    "repository.py", "storage/repository.py", "file path move", is_file_path=True
+)
+"""
+A moved file's path from the first directory the move changes.
+"""
+
+
+def test_a_file_path_is_renamed_where_it_stands_whole():
+    renames = RenameMap((MOVED_FILE,))
+    assert renames.renamed_prose("see `repository.py`.") == (
+        "see `storage/repository.py`."
+    )
+
+
+def test_a_file_path_is_not_renamed_as_the_end_of_a_longer_path():
+    renames = RenameMap((MOVED_FILE,))
+    assert renames.renamed_prose("see other/repository.py") == "see other/repository.py"
+
+
+def test_a_file_path_is_not_a_module_prefix():
+    renames = RenameMap((MOVED_FILE,))
+    assert renames.renamed_identifier("repository.py") == "repository.py"

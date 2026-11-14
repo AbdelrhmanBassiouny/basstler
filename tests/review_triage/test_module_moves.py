@@ -11,13 +11,13 @@ import pytest
 
 from basstler.review_triage.comparison import MechanicalChange
 from basstler.review_triage.module_moves import ModuleMoveDetection
-from basstler.review_triage.pull_request import PullRequestChanges, TriagedPullRequest
+from basstler.review_triage.pull_request import PullRequestChanges
 from basstler.review_triage.renames import Rename, RenameDecisions
 from basstler.review_triage.triage import PullRequestTriager
 
 from ..scratch_repository import ScratchRepository
-from .conftest import commit_trees
-from .samples import ModuleMoveSample, PullRequestSample
+from .conftest import committed_pull_request
+from .samples import ModuleMoveSample
 
 # %% the sample
 
@@ -27,16 +27,8 @@ def module_move(scratch_repository: ScratchRepository) -> PullRequestChanges:
     """
     :return: The sample moving a module, committed to a scratch repository.
     """
-    commits = commit_trees(
-        scratch_repository,
-        ModuleMoveSample.BASE_TREE.files(),
-        ModuleMoveSample.HEAD_TREE.files(),
-    )
-    payload = PullRequestSample.PAYLOAD.payload()
-    payload["base"]["sha"] = commits.base_commit
-    payload["head"]["sha"] = commits.head_commit
-    return PullRequestChanges(
-        TriagedPullRequest.from_json(payload), commits, commits.changes()
+    return committed_pull_request(
+        scratch_repository, ModuleMoveSample.BASE_TREE, ModuleMoveSample.HEAD_TREE
     )
 
 

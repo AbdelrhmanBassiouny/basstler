@@ -11,6 +11,7 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 
 from basstler.class_property import classproperty
+from basstler.review_triage.commit_tree import PACKAGE_INITIALIZER
 from basstler.review_triage.python_source import PythonSource
 from basstler.review_triage.renames import RenameMap
 from basstler.review_triage.definitions import DefinitionIndex
@@ -50,6 +51,11 @@ class MechanicalChange(ChangeKind):
     FORMATTING = "formatting"
     """
     Only the layout of code, docstrings or comments changed.
+    """
+
+    EMPTY_PACKAGE = "empty package"
+    """
+    An empty package initializer was added, making its directory a package.
     """
 
 
@@ -254,8 +260,34 @@ class PythonComparison(ContentComparison):
     def text_changes(
         self, base_text: str, head_text: str, context: JudgmentContext
     ) -> ChangeKinds | None:
-        base = PythonSource(base_text)
-        head = PythonSource(head_text)
+        return self.source_changes(
+            PythonSource(base_text), PythonSource(head_text), context
+        )
+
+    def changes(
+        self, change: FileChange, context: JudgmentContext
+    ) -> ChangeKinds | None:
+        """
+        :meth:`ContentComparison.changes`, resolving each version's relative imports
+        against the directory holding it.
+        """
+        base_path = change.previous_path or change.path
+        return self.source_changes(
+            PythonSource(change.base_text, base_path.parent.parts),
+            PythonSource(change.head_text, change.path.parent.parts),
+            context,
+        )
+
+    def source_changes(
+        self, base: PythonSource, head: PythonSource, context: JudgmentContext
+    ) -> ChangeKinds | None:
+        """
+        :param base: The file's base version.
+        :param head: The file's head version.
+        :param context: What the judgment may consult about the pull request.
+        :return: What the change consists of, ``None`` when it is not provably
+            mechanical.
+        """
         code_kinds = self.code_changes(base, head, context)
         if code_kinds is None:
             return None
@@ -273,7 +305,7 @@ class PythonComparison(ContentComparison):
             if prose_kinds is None:
                 return None
             kinds |= prose_kinds
-        if not kinds and base_text != head_text:
+        if not kinds and base.text != head.text:
             kinds.add(MechanicalChange.FORMATTING)
         return frozenset(kinds)
 
@@ -295,6 +327,43 @@ class PythonComparison(ContentComparison):
         return None
 
 
+class EmptyPackageAddition(FileJudgment):
+    """
+    Judges an added package initializer holding nothing but whitespace as mechanical.
+    """
+
+    def applies_to(self, change: FileChange) -> bool:
+        return (
+            change.base_text is None
+            and change.head_text is not None
+            and change.path.name == PACKAGE_INITIALIZER
+        )
+
+    def changes(
+        self, change: FileChange, context: JudgmentContext
+    ) -> ChangeKinds | None:
+        if change.head_text.strip():
+            return None
+        return frozenset({MechanicalChange.EMPTY_PACKAGE})
+
+
+class RenamedTextComparison(FileJudgment):
+    """
+    Judges a text file of any other type: mechanical only when the renames alone turn
+    its base version into its head version, since its whitespace may carry meaning.
+    """
+
+    def applies_to(self, change: FileChange) -> bool:
+        return change.base_text is not None and change.head_text is not None
+
+    def changes(
+        self, change: FileChange, context: JudgmentContext
+    ) -> ChangeKinds | None:
+        if context.renames.renamed_prose(change.base_text) == change.head_text:
+            return frozenset({MechanicalChange.RENAME})
+        return None
+
+
 # %% judging a file
 
 
@@ -310,7 +379,12 @@ class FileTriager:
     What the judgments may consult about the pull request.
     """
 
-    judgments: tuple[FileJudgment, ...] = (PythonComparison(), ProseComparison())
+    judgments: tuple[FileJudgment, ...] = (
+        PythonComparison(),
+        ProseComparison(),
+        EmptyPackageAddition(),
+        RenamedTextComparison(),
+    )
     """
     The judgments, tried in order.
     """

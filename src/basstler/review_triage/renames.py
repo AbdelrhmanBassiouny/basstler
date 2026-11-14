@@ -34,6 +34,11 @@ class Rename:
     The label of the rename source that found it.
     """
 
+    is_file_path: bool = False
+    """
+    Whether both sides are file paths, which never occur inside code.
+    """
+
 
 @dataclass(frozen=True)
 class RenameDecisions:
@@ -86,6 +91,13 @@ class RenameMap:
         return cls(tuple(renames[old] for old in sorted(renames)))
 
     @cached_property
+    def identifier_renames(self) -> tuple[Rename, ...]:
+        """
+        The renames of identifiers and module paths, those of file paths left out.
+        """
+        return tuple(rename for rename in self.renames if not rename.is_file_path)
+
+    @cached_property
     def replacements(self) -> dict[str, str]:
         """
         The new identifier of each old one.
@@ -99,8 +111,24 @@ class RenameMap:
         """
         if not self.renames:
             return None
-        alternatives = sorted(self.replacements, key=len, reverse=True)
-        return re.compile(r"\b(?:" + "|".join(map(re.escape, alternatives)) + r")\b")
+        alternatives = [
+            self.whole_word_pattern(rename)
+            for rename in sorted(
+                self.renames, key=lambda rename: len(rename.old), reverse=True
+            )
+        ]
+        return re.compile("|".join(alternatives))
+
+    @staticmethod
+    def whole_word_pattern(rename: Rename) -> str:
+        """
+        :param rename: A rename.
+        :return: What matches its old side only where it stands whole; a file path
+            never as the end of a longer path.
+        """
+        if not rename.is_file_path:
+            return rf"\b{re.escape(rename.old)}\b"
+        return rf"(?<![\w/.-]){re.escape(rename.old)}(?![\w/-])"
 
     @cached_property
     def renamed_modules(self) -> tuple[str, ...]:
@@ -109,7 +137,11 @@ class RenameMap:
         """
         return tuple(
             sorted(
-                (old for old in self.replacements if DOTTED_NAME_SEPARATOR in old),
+                (
+                    rename.old
+                    for rename in self.renames
+                    if DOTTED_NAME_SEPARATOR in rename.old and not rename.is_file_path
+                ),
                 key=len,
                 reverse=True,
             )
