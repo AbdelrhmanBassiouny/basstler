@@ -21,47 +21,13 @@ from basstler.git.branch import Branch
 from basstler.github.repository import Repository
 from basstler.github.states import CombinedCheckState
 from basstler.github.tooling_labels import GitHubLabel
+from basstler.stack.branch_status import BranchStatus
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BaseBranchScopeError, BoardUnavailable
+from basstler.stack.promotability import PromotionReadiness
 from basstler.stack.settings import Configuration
 
 # %% domain model
-
-
-class BranchStatus(StrEnum):
-    """A stack node's lifecycle position."""
-
-    DRAFT = "draft"
-    """Its author has not yet reviewed it themselves, so it may not be promoted."""
-
-    READY = "ready"
-    """Out of draft - reviewed by its author, and promotable once its parent has merged."""
-
-    IN_REVIEW = "in-review"
-    """Promoted to the upstream, where it waits on that queue rather than on us."""
-
-    MERGED = "merged"
-    """Its own commits are already contained in the upstream base."""
-
-    @classmethod
-    def derive(cls, draft: bool, merged: bool, in_review: bool) -> BranchStatus:
-        """Map a pull request's raw facts to a lifecycle status.
-
-        Precedence: a merged branch is ``merged``; a branch under upstream review is
-        ``in-review``; an un-drafted branch is ``ready`` (self-approved for promotion);
-        otherwise ``draft``.
-
-        :param draft: Whether the pull request is still a draft.
-        :param merged: Whether the branch has landed upstream (git ancestry).
-        :param in_review: Whether an upstream pull request opened from the branch is
-            open.
-        :return: The derived status.
-        """
-        if merged:
-            return cls.MERGED
-        if in_review:
-            return cls.IN_REVIEW
-        return cls.DRAFT if draft else cls.READY
 
 
 class IntegrationStrategy(StrEnum):
@@ -607,6 +573,18 @@ class Stack:
         """
         return self.effective_parent(branch).branch
 
+    def readiness_of(self, branch: StackBranch) -> PromotionReadiness:
+        """
+        :param branch: A branch of the stack.
+        :return: The facts deciding whether it may be promoted, and what they say.
+        """
+        return PromotionReadiness(
+            status=branch.status,
+            parent_landed=self.parent_landed(branch),
+            withheld=self.needs_resolution(branch),
+            checks_failed=branch.checks_failed,
+        )
+
     def promotion_order(self) -> list[StackBranch]:
         """The branches to submit to the upstream next, in dependency order.
 
@@ -622,10 +600,7 @@ class Stack:
         return [
             branch
             for branch in self.maintained_branches()
-            if branch.status == BranchStatus.READY
-            and self.parent_landed(branch)
-            and not self.needs_resolution(branch)
-            and not branch.checks_failed
+            if self.readiness_of(branch).is_promotable
         ]
 
     def withheld_by_failing_checks(self) -> list[StackBranch]:

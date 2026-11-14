@@ -42,6 +42,8 @@ def api_pull_request(
         PullRequestField.MERGED_AT: None,
         PullRequestField.LABELS: [],
         PullRequestField.HTML_URL: reference.url,
+        PullRequestField.BASE: "main",
+        PullRequestField.TITLE: f"A pull request #{reference.number}",
     }
     record.update(overrides or {})
     return {

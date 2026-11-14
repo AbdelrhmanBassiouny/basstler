@@ -16,7 +16,12 @@ from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.render_common import sanitize_http_url
 
 if TYPE_CHECKING:
-    from basstler.plan_site.cards import DependencyChip, ItemAction, StartNowAction
+    from basstler.plan_site.cards import (
+        DependencyChip,
+        ItemAction,
+        PromotionButton,
+        StartNowAction,
+    )
 
 
 # %% waves and tracks
@@ -224,6 +229,12 @@ class Item:
     """
     The start action of a not-started item that only open draft dependencies hold back;
     ``None`` for any other item.
+    """
+
+    promotion: PromotionButton | None = field(default=None, init=False)
+    """
+    The button opening this item's pull request on the upstream; ``None`` unless the pull
+    request is open in a fork.
     """
 
     needs_review: bool = field(default=False, init=False)
