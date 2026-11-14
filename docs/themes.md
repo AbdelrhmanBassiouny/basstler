@@ -1,7 +1,10 @@
 # Plan site themes
 
-Every page of the plan site has a menu at its top: **Scheme** (system, light or dark)
-and **Theme**. A viewer's pick is kept in their own browser and applied before the page
+Every page of the plan site has a menu at its top: **Scheme** (system, light or dark),
+**Theme** and **Font**. Font starts on *Theme's own*, the fonts the theme shown sets; a
+viewer can instead pick one of the fonts the site serves for headings and buttons
+(Cinzel, Almendra, Playfair Display, Oswald), or *Plain* for the device's own sans-serif
+everywhere. A viewer's pick is kept in their own browser and applied before the page
 is drawn, so it carries across pages and visits. A viewer who picked nothing sees the
 site's defaults.
 
@@ -16,8 +19,9 @@ site's defaults.
 | `citadel` | Gold on night slate, small-capital inscription headings, gilded scrollwork frames set with gems, studded gold buttons; a citadel on a crag with dragons, a wizard and knights under twinkling stars |
 
 Every theme but Classic is animated: cards arrive one after another, work under way
-glows, progress bars shimmer, the backdrop drifts and a pressed button throws a burst
-of sparks, flames, leaves or petals. A viewer whose system asks for
+glows, progress bars shimmer, the backdrop drifts, a figure flies across the sky (a
+dragon, ravens, an owl or butterflies) and a pressed button throws a burst of sparks,
+flames, leaves or petals. A viewer whose system asks for
 reduced motion sees all of it still.
 
 ## Setting the defaults and adding themes
@@ -84,7 +88,7 @@ An added theme with a built-in theme's identifier replaces it. The
     or `petals` (a garden, a gazebo, swans and cats). With a backdrop, cards and wave
     panels are slightly see-through, so the scene shows behind them.
   - `animated`: `true` makes cards arrive, work under way glow, progress bars shimmer
-    and the backdrop drift, and a press on a button or a menu throws a burst of the
+    and the backdrop drift with a figure flying across it, and a press on a button or a menu throws a burst of the
     backdrop's own sparks, flames, leaves or petals; `false`, the default, keeps
     everything still.
   - `chip_shape`: `pill`, `rounded` (the small corner radius), `square` or `notched`

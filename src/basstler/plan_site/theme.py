@@ -104,6 +104,11 @@ class AppearanceAttribute(StrEnum):
     The :class:`ColorScheme` shown.
     """
 
+    FONT = "data-font"
+    """
+    The :class:`FontChoice` or :attr:`FontFace.identifier` shown.
+    """
+
 
 class AppearanceStorageKey(StrEnum):
     """
@@ -118,6 +123,11 @@ class AppearanceStorageKey(StrEnum):
     SCHEME = "basstler-site-scheme"
     """
     The :class:`ColorScheme` the viewer picked.
+    """
+
+    FONT = "basstler-site-font"
+    """
+    The :class:`FontChoice` or :attr:`FontFace.identifier` the viewer picked.
     """
 
 
@@ -442,11 +452,34 @@ class FontFace:
     """
 
     @property
+    def identifier(self) -> str:
+        """
+        The family as a viewer's pick is kept: lowercase words joined by hyphens.
+        """
+        return self.family.lower().replace(" ", "-")
+
+    @property
     def site_path(self) -> str:
         """
         Where the site serves the file, relative to its stylesheet.
         """
         return f"{self.file.parent.name}/{self.file.name}"
+
+
+class FontChoice(StrEnum):
+    """
+    What a viewer picks in the font menu besides one of the :class:`BundledFont` faces.
+    """
+
+    THEME_OWN = "theme"
+    """
+    The fonts the theme shown sets.
+    """
+
+    PLAIN = "plain"
+    """
+    The device's own sans-serif font for headings and body text alike.
+    """
 
 
 class BundledFont(Enum):
@@ -998,7 +1031,7 @@ class SiteAppearance:
     @property
     def viewer_choices(self) -> list[ViewerChoice]:
         """
-        The colour scheme menu and the theme menu every page shows.
+        The colour scheme, theme and font menus every page shows.
         """
         return [
             ViewerChoice(
@@ -1018,5 +1051,19 @@ class SiteAppearance:
                     ChoiceOption(theme.identifier, theme.title) for theme in self.themes
                 ],
                 default=self.default_theme.identifier,
+            ),
+            ViewerChoice(
+                label="Font",
+                attribute=AppearanceAttribute.FONT,
+                storage_key=AppearanceStorageKey.FONT,
+                options=[
+                    ChoiceOption(FontChoice.THEME_OWN, "Theme's own"),
+                    *(
+                        ChoiceOption(font.value.identifier, font.value.family)
+                        for font in BundledFont
+                    ),
+                    ChoiceOption(FontChoice.PLAIN, "Plain"),
+                ],
+                default=FontChoice.THEME_OWN,
             ),
         ]

@@ -27,6 +27,7 @@ from basstler.plan_site.theme import (
     ChipShape,
     Color,
     ColorScheme,
+    FontChoice,
     Frame,
     HeadingCase,
     SiteAppearance,
@@ -398,12 +399,13 @@ def hub_page_html(readable_theme: SiteTheme) -> str:
     return page.render()
 
 
-def test_a_page_is_drawn_in_the_default_theme_and_scheme_before_any_script(
+def test_a_page_is_drawn_in_the_default_theme_scheme_and_font_before_any_script(
     hub_page_html: str, readable_theme: SiteTheme
 ):
     assert (
         f'<html lang="en" {AppearanceAttribute.SCHEME}="{ColorScheme.DARK}" '
-        f'{AppearanceAttribute.THEME}="{readable_theme.identifier}">'
+        f'{AppearanceAttribute.THEME}="{readable_theme.identifier}" '
+        f'{AppearanceAttribute.FONT}="{FontChoice.THEME_OWN}">'
     ) in hub_page_html
 
 
@@ -412,6 +414,38 @@ def test_a_page_offers_every_published_theme_and_scheme(hub_page_html: str):
         assert f'<option value="{theme.identifier}"' in hub_page_html
     for scheme in ColorScheme:
         assert f'<option value="{scheme}"' in hub_page_html
+
+
+def test_a_page_offers_the_theme_s_own_fonts_every_served_font_and_a_plain_one(
+    hub_page_html: str,
+):
+    values = [*FontChoice, *(font.value.identifier for font in BundledFont)]
+    for value in values:
+        assert f'<option value="{value}"' in hub_page_html
+    assert f'<option value="{FontChoice.THEME_OWN}" selected' in hub_page_html
+
+
+def test_a_page_keeps_the_viewer_s_font_pick(hub_page_html: str):
+    assert AppearanceStorageKey.FONT in hub_page_html
+
+
+@pytest.mark.parametrize("font", BundledFont)
+def test_a_picked_font_replaces_the_theme_s_heading_font(font: BundledFont):
+    face = font.value
+    picked = f'[{AppearanceAttribute.FONT}="{face.identifier}"] {{'
+    rule = SiteStylesheet().render().split(picked, 1)[1].split("}", 1)[0]
+    assert f'--font-heading: "{face.family}"' in rule
+
+
+def test_only_an_animated_theme_has_a_figure_flying_across(readable_theme: SiteTheme):
+    stylesheet = SiteStylesheet(
+        SiteAppearance(AppearanceSettings(themes=(readable_theme,)))
+    ).render()
+    assert "--backdrop-flyer: url(" in theme_declaration(readable_theme)
+    assert (
+        "content: var(--alive)"
+        in stylesheet.split("html::before {", 1)[1].split("}", 1)[0]
+    )
 
 
 def test_a_page_applies_the_stored_choice_in_its_head(hub_page_html: str):

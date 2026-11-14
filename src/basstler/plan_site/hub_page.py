@@ -23,6 +23,7 @@ from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.plan_site.site_page import SitePage
 from basstler.plan_site.theme import (
     BundledFont,
+    FontChoice,
     Backdrop,
     Color,
     AppearanceAttribute,
@@ -627,6 +628,7 @@ class SiteStylesheet(TemplatePage):
             heading_case=HeadingCase,
             color=Color,
             bundled_font=BundledFont,
+            font_choice=FontChoice,
         )
 
 

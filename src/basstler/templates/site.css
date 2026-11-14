@@ -37,6 +37,7 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
     --backdrop-scene: {{ artwork("backdrop_" ~ style.backdrop ~ "_scene", palette) }};
     --backdrop-particles: {{ artwork("backdrop_" ~ style.backdrop ~ "_particles", palette) }};
     --burst-art: {{ artwork("burst_" ~ style.backdrop, palette) }};
+    --backdrop-flyer: {{ artwork("flyer_" ~ style.backdrop, palette) }};
 {% endif %}
 {% endmacro %}
 
@@ -93,7 +94,7 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
     --panel-share: 72%;
 {% endif %}
 {% if theme_backdrop == backdrop.STARS %}
-    --drift-x: -1; --drift-y: 0; --drift-duration: 240s; --twinkle-duration: 2.6s; --burst-fall: 0px;
+    --drift-x: -1; --drift-y: 0; --drift-duration: 110s; --twinkle-duration: 1.8s; --flyer-duration: 30s; --burst-fall: 0px;
 {% elif theme_backdrop == backdrop.EMBERS %}
     --drift-x: 0; --drift-y: -1; --drift-duration: 26s; --twinkle-duration: 1.7s; --burst-fall: -70px;
 {% elif theme_backdrop == backdrop.LEAVES %}
@@ -185,6 +186,9 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
   --panel: color-mix(in srgb, var(--surface) var(--panel-share), transparent);
   --panel-alt: color-mix(in srgb, var(--surface-alt) var(--panel-share), transparent);
   --burst-art: none;
+  --backdrop-flyer: none;
+  --flyer-width: 170px;
+  --flyer-duration: 44s;
   --burst-count: 0;
   --burst-size: 18px;
   --burst-reach: 90;
@@ -192,7 +196,7 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
   --burst-duration: 900ms;
 }
 
-{% for theme in appearance.themes %}
+{% for theme in appearance.themes %}{# the font rules after this loop override a theme's own fonts #}
 {% set selector %}:root[{{ attribute.THEME }}="{{ theme.identifier }}"]{% endset %}
 /* {{ theme.title }} */
 {{ selector }} {
@@ -217,6 +221,17 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
 {{ palette_tokens(theme.dark, scheme.DARK, theme.style) }}}
 
 {% endfor %}
+
+/* %% the font a viewer picked over the theme's own */
+
+{% for font in bundled_font %}
+:root[{{ attribute.FONT }}="{{ font.value.identifier }}"] { --font-heading: "{{ font.value.family }}", var(--font-sans); }
+{% endfor %}
+:root[{{ attribute.FONT }}="{{ font_choice.PLAIN }}"] {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: var(--font-sans);
+}
+
 /* %% page */
 
 * { box-sizing: border-box; }
@@ -457,6 +472,19 @@ a.progress-card:hover, a.progress-card:focus-visible {
 }
 
 /* %% backdrop: a scene along the foot of the page and what drifts behind it */
+
+html::before {
+  content: var(--alive); position: fixed; top: 10vh; left: 100vw; z-index: -1; pointer-events: none;
+  width: var(--flyer-width); aspect-ratio: 16 / 7;
+  background: var(--backdrop-flyer) center / contain no-repeat;
+  animation: fly var(--flyer-duration) linear infinite; animation-play-state: var(--play-state);
+}
+@keyframes fly {
+  25% { transform: translate(calc(-0.25 * (100vw + var(--flyer-width))), -5vh) rotate(-4deg); }
+  50% { transform: translate(calc(-0.5 * (100vw + var(--flyer-width))), 3vh) rotate(3deg); }
+  75% { transform: translate(calc(-0.75 * (100vw + var(--flyer-width))), -3vh) rotate(-3deg); }
+  to { transform: translate(calc(-1 * (100vw + var(--flyer-width))), 0); }
+}
 
 html::after {
   content: ""; position: fixed; inset: auto 0 0; height: min(460px, 62vh); z-index: -1; pointer-events: none;
