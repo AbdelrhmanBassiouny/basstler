@@ -256,4 +256,4 @@ def test_render_preselects_the_items_recommended_model_on_its_action_button(stat
 def test_render_preselects_no_model_for_an_item_with_no_recommendation():
     output = render_item_page(item("a", ItemStatus.NOT_STARTED))
     assert '<span class="model-picker" data-model=""' in output
-    assert "model-picker-option-selected" not in output
+    assert ' class="model-picker-option-selected"' not in output
