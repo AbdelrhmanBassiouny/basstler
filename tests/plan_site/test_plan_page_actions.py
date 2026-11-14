@@ -28,37 +28,48 @@ from .plan_page_builders import (
 
 
 def test_action_is_start_now_for_a_not_started_item():
+    """
+    A not-started item with nothing to wait on gets the kickoff command.
+    """
     renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
-    renderer.render()
-    action = renderer.plan.items[0].action
+    page = renderer.render()
+    action = page.cards_by_identifier["a"].action
     assert action.label == "Start now"
     assert action.command == "/plan-item-kickoff test-plan a"
 
 
 def test_action_none_for_a_not_started_item_while_a_dependency_is_not_ready():
+    """
+    A not-started item gets no button while a dependency is not ready.
+    """
     items = [
         item("a", ItemStatus.NOT_STARTED),
         item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(items)
-    renderer.render()
-    assert renderer.plan.items_by_identifier["b"].action is None
+    page = renderer.render()
+    assert page.cards_by_identifier["b"].action is None
 
 
 def test_action_set_once_every_dependency_is_ready():
+    """
+    A not-started item gets the kickoff command once every dependency is done.
+    """
     items = [
         item("a", ItemStatus.DONE),
         item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(items)
-    renderer.render()
+    page = renderer.render()
     assert (
-        renderer.plan.items_by_identifier["b"].action.command
-        == "/plan-item-kickoff test-plan b"
+        page.cards_by_identifier["b"].action.command == "/plan-item-kickoff test-plan b"
     )
 
 
 def test_action_set_when_dependency_is_open_and_ready_for_review():
+    """
+    A dependency whose pull request is ready for review lets its dependent start.
+    """
     pull_requests_by_repository = {
         "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
@@ -69,11 +80,14 @@ def test_action_set_when_dependency_is_open_and_ready_for_review():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    renderer.render()
-    assert renderer.plan.items_by_identifier["b"].action is not None
+    page = renderer.render()
+    assert page.cards_by_identifier["b"].action is not None
 
 
 def test_action_none_for_a_not_started_item_when_dependency_is_still_a_draft():
+    """
+    A dependency whose pull request is a draft holds its dependent's button back.
+    """
     pull_requests_by_repository = {
         "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
@@ -84,11 +98,14 @@ def test_action_none_for_a_not_started_item_when_dependency_is_still_a_draft():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    renderer.render()
-    assert renderer.plan.items_by_identifier["b"].action is None
+    page = renderer.render()
+    assert page.cards_by_identifier["b"].action is None
 
 
 def test_action_ready_check_is_order_independent():
+    """
+    A dependency listed after its dependent still counts as ready.
+    """
     # "b" depends on "a", but "a" appears later in plan.items - the
     # dependency's live_state must still be classified before "b"'s
     # action is computed.
@@ -97,39 +114,50 @@ def test_action_ready_check_is_order_independent():
         item("a", ItemStatus.DONE),
     ]
     renderer = make_renderer(items)
-    renderer.render()
+    page = renderer.render()
     assert (
-        renderer.plan.items_by_identifier["b"].action.command
-        == "/plan-item-kickoff test-plan b"
+        page.cards_by_identifier["b"].action.command == "/plan-item-kickoff test-plan b"
     )
 
 
 def test_action_none_for_a_done_item():
+    """
+    A done item gets no button.
+    """
     renderer = make_renderer([item("a", ItemStatus.DONE)])
-    renderer.render()
-    assert renderer.plan.items[0].action is None
+    page = renderer.render()
+    assert page.cards_by_identifier["a"].action is None
 
 
 def test_action_is_resolve_for_a_blocked_item():
+    """
+    A blocked item gets the resolve command, labelled Resolve.
+    """
     renderer = make_renderer([item("a", ItemStatus.BLOCKED)])
-    renderer.render()
-    action = renderer.plan.items[0].action
+    page = renderer.render()
+    action = page.cards_by_identifier["a"].action
     assert action.label == "Resolve"
     assert action.command == "/plan-item-resolve test-plan a"
 
 
 def test_action_is_resume_for_an_in_progress_item():
+    """
+    An in-progress item gets the resolve command, labelled Resume.
+    """
     renderer = make_renderer([item("a", ItemStatus.IN_PROGRESS)])
-    renderer.render()
-    action = renderer.plan.items[0].action
+    page = renderer.render()
+    action = page.cards_by_identifier["a"].action
     assert action.label == "Resume"
     assert action.command == "/plan-item-resolve test-plan a"
 
 
 def test_action_is_reconsider_for_a_deferred_item():
+    """
+    A deferred item gets the resolve command, labelled Reconsider.
+    """
     renderer = make_renderer([item("a", ItemStatus.DEFERRED)])
-    renderer.render()
-    action = renderer.plan.items[0].action
+    page = renderer.render()
+    action = page.cards_by_identifier["a"].action
     assert action.label == "Reconsider"
     assert action.command == "/plan-item-resolve test-plan a"
 

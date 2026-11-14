@@ -13,13 +13,11 @@ from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
 
+from basstler.plan.dependencies import UnresolvedDependency
+
 if TYPE_CHECKING:
     from basstler.github.repository import PullRequestReference
-    from basstler.plan.dependencies import (
-        Dependency,
-        ResolvedDependency,
-        UnresolvedDependency,
-    )
+    from basstler.plan.dependencies import Dependency, ResolvedDependency
     from basstler.plan_site.plan import Item, Track, Wave
 
 
@@ -125,7 +123,7 @@ class RefreshSource(StrEnum):
 @dataclass
 class DependencyChip:
     """One ready-to-render ``needs`` chip on an item's card - see
-    :attr:`Item.dependency_chips`."""
+    :attr:`ItemCard.dependency_chips`."""
 
     dependency: Dependency
     """The dependency the chip stands for."""
@@ -150,6 +148,20 @@ class DependencyChip:
     def tooltip_separator(cls) -> str:
         """Joins the parts of a cross-plan chip's hover title."""
         return " · "
+
+    @classmethod
+    def of(
+        cls, dependency: Dependency, locate_plan_page: Callable[[str], str] | None
+    ) -> DependencyChip:
+        """Build the chip for a dependency, resolved or not.
+
+        :param dependency: The dependency this chip stands for.
+        :param locate_plan_page: Where another plan's page is published, given its id,
+            or ``None`` when plan pages have no known address.
+        """
+        if isinstance(dependency, UnresolvedDependency):
+            return cls.unresolved(dependency)
+        return cls.of_dependency(dependency, locate_plan_page)
 
     @classmethod
     def unresolved(cls, dependency: UnresolvedDependency) -> DependencyChip:
@@ -203,7 +215,7 @@ class DependencyChip:
 @dataclass(frozen=True)
 class ItemAction(ABC):
     """One not-done item's actionable button - see
-    :attr:`Item.action`. The label matches what the status actually calls
+    :attr:`ItemCard.action`. The label matches what the status actually calls
     for (starting fresh work reads differently from resolving a blocker),
     but every non-``done`` status gets one: there's always something
     actionable to do next besides waiting.
@@ -300,6 +312,38 @@ class ModelOption(StrEnum):
 
     FABLE_5 = ("claude-fable-5", "Fable 5")
     """Claude Fable 5."""
+
+
+# %% item cards
+
+
+@dataclass
+class ItemCard:
+    """
+    What one item's card shows beyond the item itself.
+    """
+
+    item: Item
+    """
+    The item the card shows.
+    """
+
+    dependency_chips: list[DependencyChip]
+    """
+    One chip per entry of the item's :attr:`Item.depends_on`.
+    """
+
+    action: ItemAction | None
+    """
+    The item's action button; ``None`` for a done item, and for a not-started item
+    until its dependencies are ready to build on.
+    """
+
+    pending_start_action: StartNowAction | None = None
+    """
+    The start action of a not-started item that only open draft dependencies hold back;
+    ``None`` for any other item.
+    """
 
 
 # %% track and wave sections

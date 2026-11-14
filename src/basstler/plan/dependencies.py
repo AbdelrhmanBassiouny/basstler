@@ -6,7 +6,6 @@ or, through a plans directory, in another - and that item's readiness.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -17,7 +16,6 @@ from basstler.class_property import classproperty
 from basstler.github.pull_request_state import LivePullRequests, LiveState
 from basstler.github.repository import PullRequestReference, Repository
 from basstler.plan.model import PlanDocument, PlanManifest
-from basstler.plan_site.cards import DependencyChip
 from basstler.plan_site.plan import Item, Plan
 
 # %% references
@@ -152,15 +150,6 @@ class Dependency(ABC):
         """
 
     @abstractmethod
-    def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
-        """
-        Render this dependency as a ``needs`` chip on its dependent's card.
-
-        :param locate_plan_page: Where another plan's page is published, given its id,
-            or ``None`` when plan pages have no known address.
-        """
-
-    @abstractmethod
     def classify_live_state(
         self,
         live_pull_requests: LivePullRequests,
@@ -236,9 +225,6 @@ class ResolvedDependency(Dependency):
         referenced item's own answer."""
         return self.item.is_ready_for_dependent_review()
 
-    def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
-        return DependencyChip.of_dependency(self, locate_plan_page)
-
     def classify_live_state(
         self,
         live_pull_requests: LivePullRequests,
@@ -279,11 +265,6 @@ class UnresolvedDependency(Dependency):
         """See :meth:`Dependency.is_ready_for_dependent_review` - always
         ``False``."""
         return False
-
-    def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
-        """See :meth:`Dependency.chip` - the entry's own text, marked unmet and
-        linking nowhere."""
-        return DependencyChip.unresolved(self)
 
     def classify_live_state(
         self,

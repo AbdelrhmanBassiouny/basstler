@@ -8,15 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from basstler.github.pull_request_state import LiveState, PullRequestRecord
 from basstler.github.repository import GitHubAddress, PullRequestReference
 from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.render_common import sanitize_http_url
-
-if TYPE_CHECKING:
-    from basstler.plan_site.cards import DependencyChip, ItemAction, StartNowAction
 
 
 # %% waves and tracks
@@ -207,23 +204,6 @@ class Item:
     upstream_pull_request_url: str | None = field(default=None, init=False)
     """
     The upstream pull request its pull request's description links, if any.
-    """
-
-    dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
-    """
-    One chip per entry of :attr:`depends_on`.
-    """
-
-    action: ItemAction | None = field(default=None, init=False)
-    """
-    This item's action button; ``None`` for a done item, and for a not-started item
-    until its dependencies are ready to build on.
-    """
-
-    pending_start_action: StartNowAction | None = field(default=None, init=False)
-    """
-    The start action of a not-started item that only open draft dependencies hold back;
-    ``None`` for any other item.
     """
 
     needs_review: bool = field(default=False, init=False)

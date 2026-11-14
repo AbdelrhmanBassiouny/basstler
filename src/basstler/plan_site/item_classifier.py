@@ -16,7 +16,13 @@ from basstler.github.pull_request_state import (
 from basstler.github.repository import PullRequestReference, Repository
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
+from basstler.plan_site.cards import (
+    DependencyChip,
+    ItemAction,
+    ItemCard,
+    ResolveAction,
+    StartNowAction,
+)
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.workflows import PlanSiteSecret
 
@@ -26,8 +32,8 @@ from basstler.plan_site.workflows import PlanSiteSecret
 @dataclass
 class ItemClassifier:
     """
-    Fills in every item's live state, pull request, drift, dependency chips and action,
-    and shows an item whose pull request merged as done.
+    Fills in every item's live state, pull request and drift, shows an item whose pull
+    request merged as done, and builds each item's card.
     """
 
     plan: Plan
@@ -51,20 +57,28 @@ class ItemClassifier:
     have no known address.
     """
 
-    def classify(self) -> None:
+    def classify(self) -> dict[str, ItemCard]:
         """
         Fill in every item of :attr:`plan` in place.
+
+        :return: Each item's card, by item id.
         """
         self.dependencies.classify_live_states(self.live_pull_requests)
         for item in self.plan.items:
             self._classify_pull_request(item)
+        cards = {}
         for item in self.plan.items:
-            item.dependency_chips = [
-                dependency.chip(self.locate_plan_page)
-                for dependency in self.dependencies.dependencies_of(item)
-            ]
-            item.action = self._action_for(item)
-            item.pending_start_action = self._pending_start_action_for(item)
+            card = ItemCard(
+                item=item,
+                dependency_chips=[
+                    DependencyChip.of(dependency, self.locate_plan_page)
+                    for dependency in self.dependencies.dependencies_of(item)
+                ],
+                action=self._action_for(item),
+            )
+            card.pending_start_action = self._pending_start_action_for(card)
+            cards[item.identifier] = card
+        return cards
 
     def _classify_pull_request(self, item: Item) -> None:
         """
@@ -142,23 +156,22 @@ class ItemClassifier:
             item_identifier=item.identifier,
         )
 
-    def _pending_start_action_for(self, item: Item) -> StartNowAction | None:
+    def _pending_start_action_for(self, card: ItemCard) -> StartNowAction | None:
         """
         Build the start action of a not-started item that only open draft dependencies
         hold back, or ``None`` for any other item.
 
-        Reads :attr:`Item.action` and :attr:`Item.dependency_chips`, so runs after both
-        are filled in.
+        Reads :attr:`ItemCard.action` and :attr:`ItemCard.dependency_chips`.
         """
-        if item.status is not ItemStatus.NOT_STARTED or item.action is not None:
+        if card.item.status is not ItemStatus.NOT_STARTED or card.action is not None:
             return None
         if not all(
             chip.dependency.is_ready_to_unblock_dependents()
             or chip.draft_pull_request is not None
-            for chip in item.dependency_chips
+            for chip in card.dependency_chips
         ):
             return None
-        return self._start_action_for(item)
+        return self._start_action_for(card.item)
 
     @staticmethod
     def access_warning_of(repository: Repository, refusal: GitHubRequestFailed) -> str:
