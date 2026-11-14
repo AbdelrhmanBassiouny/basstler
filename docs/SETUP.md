@@ -108,7 +108,49 @@ A project that prefers a dispatch-only workflow on its default branch may still 
 the package, both from `main`; to pin a release instead, change both references to its
 tag.
 
-## 4. Check it worked
+## 4. For the review triage: choose how files are marked viewed
+
+Only if you use `basstler review-triage mark-viewed`. "Viewed" is kept for each GitHub
+account, and only GitHub's GraphQL API sets it. A Claude Code cloud session cannot reach
+that API, so pick whichever of these fits you; both can be set up side by side.
+
+**On a computer where `gh` is logged in.** Run, in a checkout of the project:
+
+```bash
+basstler review-triage mark-viewed <pull request number> --repository <owner>/<name>
+```
+
+It needs no setup and no stored token, but a computer that is on. A cloud session can
+run it there too once you share the checkout's folder through Remote Control (the
+Claude desktop app: Settings, Claude Code, Remote Control) and the session attaches it.
+
+**In your repository's Actions, from anywhere.** Set up once:
+
+1. Copy [`examples/mark-viewed.yml`](examples/mark-viewed.yml) to
+   `.github/workflows/mark-viewed.yml` on the default branch of the repository you work
+   in: your fork, or the project itself when you push your branches there.
+2. Create a fine-grained token at `https://github.com/settings/personal-access-tokens`
+   for the repository the pull requests are opened on, with *Pull requests: Read and
+   write* and *Contents: Read*. If that repository belongs to an organization you are
+   not a member of, a fine-grained token cannot reach it; a classic token with the
+   `repo` scope can, but reaches every repository you can.
+3. Store it as the `REVIEW_TRIAGE_VIEWER_TOKEN` Actions secret of the repository from
+   step 1. Keep it in your fork where you have one: everyone who can push to a
+   repository can read its secrets through a workflow.
+4. A fork starts with Actions off; enable them once at `https://github.com/<your fork>/actions`.
+
+Then any session, a cloud one included, starts it with:
+
+```bash
+basstler review-triage request-mark-viewed <pull request number> --repository <owner>/<name>
+```
+
+The command runs the workflow of the checkout's `origin` (`--workflow-repository` names
+another) and prints the page where the run shows. The run refuses to start when the
+stored token belongs to another account than the one starting it, so it never marks
+files viewed for someone else.
+
+## 5. Check it worked
 
 ```bash
 "${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh"

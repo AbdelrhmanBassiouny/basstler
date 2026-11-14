@@ -138,7 +138,8 @@ class GraphQLAnswer(ValidatedJSONModel):
 class ViewedMarking(TriageOutput):
     """
     Marks every mechanical file viewed for the account whose credential the writer
-    sends, raising :class:`GraphQLMutationRefused` when GitHub refuses one.
+    sends, raising :class:`GraphQLMutationRefused` when GitHub refuses one or the
+    call.
     """
 
     github: GitHubWriter
@@ -152,9 +153,12 @@ class ViewedMarking(TriageOutput):
             variables = ViewedFile(
                 triage.pull_request.node_identifier, str(file.change.path)
             )
-            answer = GraphQLAnswer.from_json(
-                self.github.send(GraphQLMutation(document, variables.to_json()))
+            response = self.github.attempt_send(
+                GraphQLMutation(document, variables.to_json())
             )
+            if response.failure is not None:
+                raise GraphQLMutationRefused((response.failure.error_message(),))
+            answer = GraphQLAnswer.from_json(response.body)
             if answer.errors:
                 raise GraphQLMutationRefused(
                     tuple(error.message for error in answer.errors)

@@ -5,21 +5,28 @@ committed to a scratch repository.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any
 
 import pytest
 
 from basstler.github.client import (
+    GitHubAttemptClient,
     GitHubReader,
     GitHubResponse,
     GitHubWrite,
     GitHubWriter,
+    HttpMethod,
 )
+from basstler.github.credential import CredentialProvider
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.repository import Repository
 from basstler.review_triage.pull_request import PullRequestChanges, PullRequestReader
 from basstler.review_triage.renames import Rename, RenameMap
 
+from ..constants.paths import DatasetLocation
 from ..scratch_repository import ScratchRepository
 from .samples import DescriptionSample, PullRequestSample
 
@@ -68,6 +75,81 @@ class RecordingWriter(GitHubWriter):
     def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
         self.sent.append(write)
         return GitHubResponse(self.answer)
+
+
+def refusal(status: HTTPStatus, method: HttpMethod, path: str) -> GitHubResponse:
+    """
+    :param status: The status GitHub refuses the call with.
+    :param method: The call's method.
+    :param path: The call's path.
+    :return: GitHub's answer refusing the call.
+    """
+    return GitHubResponse(
+        None,
+        failure=GitHubRequestFailed(
+            status=status,
+            detail="",
+            method=method,
+            path=path,
+            credential_origin=CredentialProvider.CALLER,
+        ),
+    )
+
+
+@dataclass
+class RefusingWriter(GitHubWriter):
+    """
+    Refuses every write with one status.
+    """
+
+    status: HTTPStatus
+    """
+    The status every write is refused with.
+    """
+
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        return refusal(self.status, write.method, write.path)
+
+
+WORKFLOW_REPOSITORY_DETAILS: dict[str, Any] = json.loads(
+    DatasetLocation.REPOSITORY_TRUNK_DEFAULT_BRANCH.read_text()
+)
+"""
+The resource the stand-in workflow repository answers with.
+"""
+
+
+@dataclass
+class WorkflowRepositoryClient(GitHubAttemptClient):
+    """
+    Answers a repository's resource and records every write, refusing either when told.
+    """
+
+    read_refusal: HTTPStatus | None = None
+    """
+    The status reading the repository is refused with, ``None`` to answer it.
+    """
+
+    write_refusal: HTTPStatus | None = None
+    """
+    The status every write is refused with, ``None`` to accept it.
+    """
+
+    sent: list[GitHubWrite] = field(default_factory=list)
+    """
+    Every write sent, oldest first.
+    """
+
+    def attempt_get(self, path: str) -> GitHubResponse:
+        if self.read_refusal is not None:
+            return refusal(self.read_refusal, HttpMethod.GET, path)
+        return GitHubResponse(WORKFLOW_REPOSITORY_DETAILS)
+
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.sent.append(write)
+        if self.write_refusal is not None:
+            return refusal(self.write_refusal, write.method, write.path)
+        return GitHubResponse(None)
 
 
 # %% fixtures
