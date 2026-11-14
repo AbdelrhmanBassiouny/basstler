@@ -117,6 +117,16 @@ class DatasetLocation(PathEnumeration):
     A workflow that runs the package's own entry point.
     """
 
+    READABLE_THEME = DIRECTORY / "themes" / "lagoon.yaml"
+    """
+    An owner's theme whose text is readable in both colour schemes.
+    """
+
+    FAINT_THEME = DIRECTORY / "themes" / "faint.yaml"
+    """
+    An owner's theme whose muted text misses the WCAG AA contrast when shown light.
+    """
+
     BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
     """
     The item-bootstrap fixture plan: two items, a folded note, blank lines between

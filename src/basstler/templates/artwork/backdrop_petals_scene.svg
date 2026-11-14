@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="460" viewBox="0 0 1600 460">
+<circle cx="1280" cy="130" r="70" fill="{{ palette.scene_ink(0.2) }}"/><circle cx="1280" cy="130" r="96" fill="none" stroke="{{ palette.scene_ink(0.2) }}" stroke-width="3" stroke-dasharray="4 14"/>
+<path d="M0 460 L0 274 C100 274 100 263 200 263 C300 263 300 258 400 258 C500 258 500 245 600 245 C700 245 700 263 800 263 C900 263 900 247 1000 247 C1100 247 1100 327 1200 327 C1300 327 1300 288 1400 288 C1500 288 1500 274 1600 274 L1600 460 Z" fill="{{ palette.scene_ink(0.28) }}"/>
+<path d="M0 460 L0 361 C100 361 100 346 200 346 C300 346 300 393 400 393 C500 393 500 372 600 372 C700 372 700 385 800 385 C900 385 900 367 1000 367 C1100 367 1100 366 1200 366 C1300 366 1300 399 1400 399 C1500 399 1500 361 1600 361 L1600 460 Z" fill="{{ palette.scene_ink(0.5) }}"/>
+<path d="M175 450 C178 400 168 355 152 316 M182 450 C183 400 190 355 206 306" stroke="{{ palette.scene_ink(0.8) }}" stroke-width="9" fill="none" stroke-linecap="round"/>
+<circle cx="181" cy="255" r="44" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="141" cy="237" r="34" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="236" cy="246" r="34" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="89" cy="225" r="36" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="160" cy="252" r="35" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="185" cy="277" r="36" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="268" cy="329" r="36" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="149" cy="258" r="44" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="188" cy="228" r="43" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="227" cy="252" r="34" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="176" cy="235" r="42" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="189" cy="325" r="29" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="201" cy="235" r="40" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="178" cy="267" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="142" cy="245" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="227" cy="247" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="97" cy="216" r="3" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="154" cy="238" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="198" cy="275" r="3" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="271" cy="340" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="146" cy="256" r="3" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="188" cy="215" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="232" cy="244" r="3" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="186" cy="228" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="186" cy="327" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="215" cy="237" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<path d="M1045 440 C1048 390 1038 360 1022 330 M1052 440 C1053 390 1060 360 1076 322" stroke="{{ palette.scene_ink(0.8) }}" stroke-width="9" fill="none" stroke-linecap="round"/>
+<circle cx="1098" cy="273" r="33" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1055" cy="264" r="35" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1003" cy="286" r="32" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1111" cy="338" r="33" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1017" cy="303" r="30" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1119" cy="271" r="31" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1061" cy="299" r="27" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1000" cy="340" r="26" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1059" cy="321" r="27" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="992" cy="270" r="34" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="988" cy="290" r="33" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1044" cy="318" r="35" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1017" cy="267" r="23" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1109" cy="274" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1067" cy="256" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1012" cy="290" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1117" cy="352" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1006" cy="294" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1116" cy="261" r="3" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1074" cy="298" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="990" cy="340" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1061" cy="321" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1000" cy="279" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="989" cy="284" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1045" cy="316" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1006" cy="265" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<path d="M1475 455 C1478 405 1468 365 1452 329 M1482 455 C1483 405 1490 365 1506 319" stroke="{{ palette.scene_ink(0.8) }}" stroke-width="9" fill="none" stroke-linecap="round"/>
+<circle cx="1548" cy="297" r="32" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1422" cy="319" r="36" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1553" cy="329" r="46" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1506" cy="255" r="40" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1406" cy="292" r="40" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1481" cy="319" r="36" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1486" cy="297" r="32" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1398" cy="317" r="36" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1496" cy="287" r="43" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1484" cy="322" r="40" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1503" cy="287" r="40" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1521" cy="298" r="32" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1534" cy="300" r="38" fill="{{ palette.scene_ink(0.8) }}"/>
+<circle cx="1550" cy="287" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1414" cy="331" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1566" cy="330" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1514" cy="243" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1397" cy="297" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1476" cy="324" r="5" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1495" cy="283" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1389" cy="321" r="6" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1501" cy="293" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1477" cy="332" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1509" cy="295" r="3" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1522" cy="291" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<circle cx="1521" cy="314" r="4" fill="{{ palette.accent }}" opacity="0.6"/>
+<g transform="translate(620 412) scale(1.5 1.5)" fill="{{ palette.scene_ink(0.8) }}" stroke="{{ palette.scene_ink(0.8) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-50 -66 H50 C44 -90 22 -104 0 -106 C-22 -104 -44 -90 -50 -66 Z M-2 -106 h4 v-12 h-4 Z M-46 0 h92 v-6 h-92 Z M-52 6 h104 v-6 h-104 Z"/><circle cx="0" cy="-121" r="4"/>
+<path d="M-44 -66 h5 v60 h-5 Z M-22 -66 h4 v60 h-4 Z M18 -66 h4 v60 h-4 Z M39 -66 h5 v60 h-5 Z M-44 -24 h88 v3 h-88 Z M-39 -66 C-34 -52 -27 -52 -22 -66 M22 -66 C27 -52 34 -52 39 -66 M-18 -66 C-8 -48 8 -48 18 -66" />
+</g>
+<path d="M0 460 L0 444 C100 444 100 425 200 425 C300 425 300 435 400 435 C500 435 500 434 600 434 C700 434 700 437 800 437 C900 437 900 438 1000 438 C1100 438 1100 431 1200 431 C1300 431 1300 444 1400 444 C1500 444 1500 444 1600 444 L1600 460 Z" fill="{{ palette.scene_ink(1) }}"/>
+<ellipse cx="860" cy="440" rx="130" ry="13" fill="{{ palette.scene_ink(0.3) }}"/>
+<g transform="translate(850 438) scale(1.3 1.3)" fill="{{ palette.scene_ink(1) }}" stroke="{{ palette.scene_ink(1) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-20 0 C-22 -10 -8 -16 6 -14 C16 -19 25 -15 29 -6 C21 -4 22 0 14 0 Z"/>
+<path d="M-14 -8 C-23 -18 -23 -31 -14 -33 C-8 -34 -6 -29 -10 -28" fill="none" stroke-width="4.2"/>
+</g>
+<g transform="translate(930 441) scale(-0.8 0.8)" fill="{{ palette.scene_ink(1) }}" stroke="{{ palette.scene_ink(1) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-20 0 C-22 -10 -8 -16 6 -14 C16 -19 25 -15 29 -6 C21 -4 22 0 14 0 Z"/>
+<path d="M-14 -8 C-23 -18 -23 -31 -14 -33 C-8 -34 -6 -29 -10 -28" fill="none" stroke-width="4.2"/>
+</g>
+<g transform="translate(420 432) scale(1.3 1.3)" fill="{{ palette.scene_ink(1) }}" stroke="{{ palette.scene_ink(1) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 0 C-12 -14 -6 -24 0 -24 C6 -24 11 -14 9 0 Z M-5 -31 L-6 -39 L-1 -34 Z M5 -31 L6 -39 L1 -34 Z"/><circle cx="0" cy="-29" r="6.2"/>
+<path d="M8 -2 C20 -2 23 -12 17 -17" fill="none" stroke-width="3"/>
+</g>
+<g transform="translate(1290 436) scale(-1 1)" fill="{{ palette.scene_ink(1) }}" stroke="{{ palette.scene_ink(1) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 0 C-12 -14 -6 -24 0 -24 C6 -24 11 -14 9 0 Z M-5 -31 L-6 -39 L-1 -34 Z M5 -31 L6 -39 L1 -34 Z"/><circle cx="0" cy="-29" r="6.2"/>
+<path d="M8 -2 C20 -2 23 -12 17 -17" fill="none" stroke-width="3"/>
+</g>
+<g transform="translate(300 90) scale(1.4 1.4)" fill="{{ palette.scene_ink(0.6) }}" stroke="{{ palette.scene_ink(0.6) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 -3 C-5 -7 -2 -5 0 0 C2 -5 5 -7 9 -3" fill="none" stroke-width="1.8"/>
+</g>
+<g transform="translate(340 70) scale(1 1)" fill="{{ palette.scene_ink(0.6) }}" stroke="{{ palette.scene_ink(0.6) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 -3 C-5 -7 -2 -5 0 0 C2 -5 5 -7 9 -3" fill="none" stroke-width="1.8"/>
+</g>
+<g transform="translate(380 100) scale(1.1 1.1)" fill="{{ palette.scene_ink(0.6) }}" stroke="{{ palette.scene_ink(0.6) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 -3 C-5 -7 -2 -5 0 0 C2 -5 5 -7 9 -3" fill="none" stroke-width="1.8"/>
+</g>
+<g transform="translate(980 60) scale(1.2 1.2)" fill="{{ palette.scene_ink(0.6) }}" stroke="{{ palette.scene_ink(0.6) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 -3 C-5 -7 -2 -5 0 0 C2 -5 5 -7 9 -3" fill="none" stroke-width="1.8"/>
+</g>
+<g transform="translate(1020 84) scale(0.9 0.9)" fill="{{ palette.scene_ink(0.6) }}" stroke="{{ palette.scene_ink(0.6) }}" stroke-width="0" stroke-linecap="round">
+<path d="M-9 -3 C-5 -7 -2 -5 0 0 C2 -5 5 -7 9 -3" fill="none" stroke-width="1.8"/>
+</g>
+<g transform="translate(500 300) rotate(-20) scale(1.3)" fill="{{ palette.accent }}" opacity="0.7"><path d="M0 0 C-9 -11 -14 -2 0 0 C-11 7 -7 11 0 0 M0 0 C9 -11 14 -2 0 0 C11 7 7 11 0 0"/>
+</g>
+<g transform="translate(760 250) rotate(15) scale(1)" fill="{{ palette.accent }}" opacity="0.7"><path d="M0 0 C-9 -11 -14 -2 0 0 C-11 7 -7 11 0 0 M0 0 C9 -11 14 -2 0 0 C11 7 7 11 0 0"/>
+</g>
+<g transform="translate(1160 300) rotate(-10) scale(1.4)" fill="{{ palette.accent }}" opacity="0.7"><path d="M0 0 C-9 -11 -14 -2 0 0 C-11 7 -7 11 0 0 M0 0 C9 -11 14 -2 0 0 C11 7 7 11 0 0"/>
+</g>
+<g transform="translate(240 250) rotate(25) scale(0.9)" fill="{{ palette.accent }}" opacity="0.7"><path d="M0 0 C-9 -11 -14 -2 0 0 C-11 7 -7 11 0 0 M0 0 C9 -11 14 -2 0 0 C11 7 7 11 0 0"/>
+</g>
+</svg>

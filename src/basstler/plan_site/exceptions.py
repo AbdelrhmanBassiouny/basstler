@@ -257,3 +257,27 @@ class PlanSiteTokenNotEnteredError(DataclassException, ValueError):
             "run the command in your own terminal and paste the token at its hidden "
             "prompt; never paste it into a chat, a command line or a file"
         )
+
+
+# %% themes
+
+
+@dataclass
+class NoPublishableThemeError(DataclassException, LookupError):
+    """
+    Raised when every theme a site could be built with has text too faint to read.
+    """
+
+    theme_identifiers: list[str]
+    """
+    The id of every theme that was checked.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "no theme reaches the WCAG AA text contrast: "
+            f"{', '.join(self.theme_identifiers)}"
+        )
+
+    def suggest_correction(self) -> str:
+        return "fix the colours the health banner names in the hub file's themes"

@@ -9,7 +9,7 @@
 {{ progress_line(site) }}
   </header>
 
-  {{ health_banner(site.skipped_pages) }}
+  {{ health_banner(site.skipped_pages, site.skipped_themes) }}
 
   <div class="card-list">
   {% for repository in repositories %}

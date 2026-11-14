@@ -1,0 +1,7 @@
+{% set ink = palette.scene_ink(1) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="70" viewBox="0 0 160 70">
+<path d="M80 30 C62 8 34 4 6 16 C22 18 30 24 36 32 C48 30 62 34 72 42 Z M80 30 C98 8 126 4 154 16 C138 18 130 24 124 32 C112 30 98 34 88 42 Z" fill="{{ ink }}"/>
+<ellipse cx="80" cy="38" rx="10" ry="15" fill="{{ ink }}"/>
+<path d="M72 27 L70 17 L78 24 Z M88 27 L90 17 L82 24 Z" fill="{{ ink }}"/>
+<circle cx="76" cy="31" r="1.8" fill="{{ palette.warning }}"/><circle cx="84" cy="31" r="1.8" fill="{{ palette.warning }}"/>
+</svg>

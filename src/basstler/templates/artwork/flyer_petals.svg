@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="70" viewBox="0 0 160 70">
+{% for x, y, angle, size in [(38, 40, -20, 1.5), (96, 22, 15, 1.1), (132, 48, -8, 0.9)] %}
+<path d="M0 0 C-9 -11 -14 -2 0 0 C-11 7 -7 11 0 0 M0 0 C9 -11 14 -2 0 0 C11 7 7 11 0 0" transform="translate({{ x }} {{ y }}) rotate({{ angle }}) scale({{ size }})" fill="{{ palette.accent }}" opacity="0.7"/>
+{% endfor %}
+</svg>

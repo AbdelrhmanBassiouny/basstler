@@ -1,0 +1,5 @@
+{% set ink = palette.scene_ink(1) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="70" viewBox="-14 -2 160 70">
+<path d="M2 38 l-12 3 l4 -5 l-7 -1 l8 -3 l-3 -5 Z" fill="{{ palette.accent }}" opacity="0.85"/>
+<path d="M2 36 l9 -6 l5 2 l-1 -8 l8 7 C30 30 36 34 44 36 L38 4 C48 12 56 12 62 0 C66 14 76 16 84 6 C84 22 90 28 102 24 C92 34 80 40 68 42 C86 42 102 48 120 38 l9 -7 l-3 10 l9 3 l-11 3 C104 60 84 56 68 54 l-2 11 l-5 -2 l1 -9 C54 54 48 52 43 50 l-3 10 l-5 -2 l2 -10 C28 46 20 44 14 42 l-9 2 Z" fill="{{ ink }}"/>
+</svg>

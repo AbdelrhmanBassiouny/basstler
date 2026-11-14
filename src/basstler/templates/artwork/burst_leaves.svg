@@ -1,0 +1,6 @@
+{% set leaf = color(palette.accent) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+<path d="M12 22 C3 17 3 8 12 1 C21 8 21 17 12 22 Z" fill="{{ leaf }}" stroke="{{ leaf.darkened(0.6) }}" stroke-width="1"/>
+<path d="M12 23.5 V5 M12 16 l-4 -3.4 M12 16 l4 -3.4 M12 11 l-3 -2.6 M12 11 l3 -2.6" fill="none" stroke="{{ leaf.darkened(0.55) }}" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M9 17 C6 13 7 8 11 4.4" fill="none" stroke="{{ leaf.lightened(0.5) }}" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
+</svg>

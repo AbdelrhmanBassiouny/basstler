@@ -38,6 +38,7 @@ from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Plan
+from basstler.plan_site.theme import AppearanceSettings, BundledFont, SiteAppearance
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
@@ -51,6 +52,7 @@ from .first_plan import (
     OPEN_PULL_REQUEST,
     PLAN_REPOSITORY,
 )
+from .test_theme import theme_from
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value
 """
@@ -396,6 +398,36 @@ def test_the_site_build_writes_the_stylesheet_its_pages_link(
     hub_site.build(output)
     assert (output / SiteFile.STYLESHEET).read_text() == SiteStylesheet().render()
     assert link_to(hub_site.stylesheet_url) in (output / SiteFile.PAGE).read_text()
+
+
+@pytest.mark.parametrize("font", BundledFont)
+def test_the_site_build_writes_every_font_its_stylesheet_names(
+    hub_site: HubSite, tmp_path: Path, font: BundledFont
+):
+    output = tmp_path / "site"
+    hub_site.build(output)
+    assert (output / font.value.site_path).read_bytes() == font.value.file.read_bytes()
+
+
+def test_the_site_build_draws_every_page_in_the_hub_file_s_themes(
+    hub_site: HubSite, tmp_path: Path
+):
+    faint_theme = theme_from(DatasetLocation.FAINT_THEME)
+    settings = AppearanceSettings(themes=(faint_theme,))
+    site = dataclasses.replace(
+        hub_site, hub=dataclasses.replace(hub_site.hub, appearance=settings)
+    )
+    output = tmp_path / "site"
+
+    site.build(output)
+
+    assert (output / SiteFile.STYLESHEET).read_text() == SiteStylesheet(
+        SiteAppearance(settings)
+    ).render()
+    assert (
+        f"Theme <code>{faint_theme.identifier}</code>"
+        in (output / SiteFile.PAGE).read_text()
+    )
 
 
 def test_the_site_build_writes_its_digest(hub_site: HubSite, tmp_path: Path):

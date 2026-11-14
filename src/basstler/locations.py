@@ -89,6 +89,12 @@ class PackageLocation(PathEnumeration):
     The templates the plan site's pages are rendered from.
     """
 
+    SITE_FONTS = TEMPLATES / "fonts"
+    """
+    The font files the plan site serves, each beside its licence. The site serves them
+    from a directory of the same name.
+    """
+
     PACKAGE_MAP = DIRECTORY / "package_map.py"
     """
     The module declaring which distribution ships each of the package's modules.
@@ -157,6 +163,34 @@ class CommitScratchFile(PathEnumeration):
     """
 
 
+class SiteFontFile(PathEnumeration):
+    """
+    The font files the plan site serves, each the Latin letters of one open-licence face.
+    """
+
+    CINZEL = PackageLocation.SITE_FONTS.value / "cinzel-latin-700-normal.woff2"
+    """
+    Cinzel Bold: capitals after Roman inscriptions.
+    """
+
+    ALMENDRA = PackageLocation.SITE_FONTS.value / "almendra-latin-700-normal.woff2"
+    """
+    Almendra Bold: a storybook hand.
+    """
+
+    PLAYFAIR_DISPLAY_ITALIC = (
+        PackageLocation.SITE_FONTS.value / "playfair-display-latin-600-italic.woff2"
+    )
+    """
+    Playfair Display SemiBold Italic: a high-contrast serif.
+    """
+
+    OSWALD = PackageLocation.SITE_FONTS.value / "oswald-latin-600-normal.woff2"
+    """
+    Oswald SemiBold: a narrow gothic.
+    """
+
+
 class SiteTemplate(PathEnumeration):
     """
     The templates the plan site's pages and stylesheet are rendered from.
@@ -216,6 +250,18 @@ class SiteTemplate(PathEnumeration):
     """
     The plan page's script that reads every pull request's state from GitHub in the
     browser, and shows when the page was last refreshed.
+    """
+
+    APPEARANCE_SCRIPT = PackageLocation.TEMPLATES.value / "site_appearance.js"
+    """
+    The script every site page applies the viewer's theme and colour scheme with
+    before it is drawn, and keeps a new pick with.
+    """
+
+    CLICK_BURST_SCRIPT = PackageLocation.TEMPLATES.value / "site_click_burst.js"
+    """
+    The script every site page throws a burst of the theme's sparks with when a button
+    or a menu is pressed.
     """
 
 

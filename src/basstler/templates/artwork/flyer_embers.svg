@@ -1,0 +1,6 @@
+{% set ink = palette.scene_ink(1) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="70" viewBox="0 0 160 70">
+{% for x, y, size in [(40, 38, 2.6), (92, 22, 1.8), (124, 46, 1.5)] %}
+<path d="M-9 -3 C-5 -7 -2 -5 0 0 C2 -5 5 -7 9 -3 C5 -4 3 -1 0 5 C-3 -1 -5 -4 -9 -3 Z" transform="translate({{ x }} {{ y }}) scale({{ size }})" fill="{{ ink }}"/>
+{% endfor %}
+</svg>

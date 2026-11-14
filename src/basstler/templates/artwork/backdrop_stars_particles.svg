@@ -1,0 +1,17 @@
+{% set spark = color(palette.accent) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+<circle cx="53" cy="261" r="0.7" fill="{{ spark.lightened(0.6) }}" opacity="0.63"/>
+<path d="M159 140.9 q0.8 3.6 4.4 4.4 q-3.6 0.8 -4.4 4.4 q-0.8 -3.6 -4.4 -4.4 q3.6 -0.8 4.4 -4.4 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.69"/>
+<circle cx="75" cy="156" r="1.1" fill="{{ spark.lightened(0.6) }}" opacity="0.72"/>
+<circle cx="237" cy="15" r="1.1" fill="{{ spark.lightened(0.6) }}" opacity="0.63"/>
+<circle cx="248" cy="187" r="0.7" fill="{{ spark.lightened(0.6) }}" opacity="0.95"/>
+<path d="M23 18.2 q0.6 2.6 3.2 3.2 q-2.6 0.6 -3.2 3.2 q-0.6 -2.6 -3.2 -3.2 q2.6 -0.6 3.2 -3.2 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.50"/>
+<circle cx="271" cy="214" r="1.1" fill="{{ spark.lightened(0.6) }}" opacity="0.86"/>
+<circle cx="168" cy="237" r="1.1" fill="{{ spark.lightened(0.6) }}" opacity="0.78"/>
+<circle cx="115" cy="212" r="1.1" fill="{{ spark.lightened(0.6) }}" opacity="0.98"/>
+<path d="M285 132.3 q0.6 2.6 3.2 3.2 q-2.6 0.6 -3.2 3.2 q-0.6 -2.6 -3.2 -3.2 q2.6 -0.6 3.2 -3.2 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.96"/>
+<path d="M43 193.4 q0.8 3.6 4.4 4.4 q-3.6 0.8 -4.4 4.4 q-0.8 -3.6 -4.4 -4.4 q3.6 -0.8 4.4 -4.4 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.93"/>
+<path d="M49 106.7 q0.8 3.6 4.4 4.4 q-3.6 0.8 -4.4 4.4 q-0.8 -3.6 -4.4 -4.4 q3.6 -0.8 4.4 -4.4 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.99"/>
+<path d="M160 293.2 q0.6 2.6 3.2 3.2 q-2.6 0.6 -3.2 3.2 q-0.6 -2.6 -3.2 -3.2 q2.6 -0.6 3.2 -3.2 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.92"/>
+<path d="M210 99.4 q0.6 2.6 3.2 3.2 q-2.6 0.6 -3.2 3.2 q-0.6 -2.6 -3.2 -3.2 q2.6 -0.6 3.2 -3.2 Z" fill="{{ spark.lightened(0.7) }}" opacity="0.99"/>
+</svg>

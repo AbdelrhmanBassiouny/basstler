@@ -1,0 +1,55 @@
+# Forge: ember on iron, narrow capital headings, wrought-iron frames with flames, and rising sparks.
+title: Forge
+light:
+  background: "#F0EDE8"
+  surface: "#FFFFFF"
+  surface_alternate: "#E4DED6"
+  text: "#1E1A16"
+  text_muted: "#5A5148"
+  border: "#C9BFB3"
+  accent: "#B4541A"
+  accent_strong: "#8A3C0C"
+  accent_tint: "#F8E5D7"
+  good: "#2F6B34"
+  good_tint: "#E2F1E2"
+  warning: "#7A5200"
+  warning_tint: "#F7ECCF"
+  bad: "#A3221A"
+  bad_tint: "#F9E2DF"
+  info: "#2A5788"
+  info_tint: "#E2EAF3"
+  idle: "#5C564F"
+  idle_tint: "#EAE6E1"
+dark:
+  background: "#121110"
+  surface: "#1B1917"
+  surface_alternate: "#24211E"
+  text: "#EDE7E0"
+  text_muted: "#A89D92"
+  border: "#3A342E"
+  accent: "#F07A2E"
+  accent_strong: "#FF9A52"
+  accent_tint: "#3A1F0E"
+  good: "#7DC481"
+  good_tint: "#17301A"
+  warning: "#E6B450"
+  warning_tint: "#382A0F"
+  bad: "#F08A7E"
+  bad_tint: "#3D1A16"
+  info: "#8CB8EB"
+  info_tint: "#172538"
+  idle: "#B0A79D"
+  idle_tint: "#2A2622"
+style:
+  heading_letter_spacing: 0.08em
+  heading_case: uppercase
+  heading_font: '"Oswald", "Bahnschrift", "Arial Narrow", "Helvetica Neue", Arial, sans-serif'
+  corner_radius: 2px
+  small_corner_radius: 2px
+  border_width: 2px
+  frame: forged
+  backdrop: embers
+  animated: true
+  chip_shape: square
+  ornament: "⚒"
+  transition_duration: 80ms

@@ -1,0 +1,16 @@
+{% set ink = color(palette.accent) %}
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="28" viewBox="0 0 640 28">
+<defs>
+<g id="half" fill="none" stroke-linecap="round">
+<path d="M306 14 C290 2 276 4 274 12 C273 18 281 20 283 15 C284 12 280 11 279 13" stroke="{{ ink.darkened(0.2) }}" stroke-width="2.2"/>
+<path d="M306 14 C290 26 270 24 258 16 C240 5 226 12 214 14 C150 15 80 14 4 14" stroke="{{ ink.darkened(0.2) }}" stroke-width="2.2"/>
+<path d="M258 16 C252 22 244 22 242 17 C241 13 246 12 247 15" stroke="{{ ink.darkened(0.2) }}" stroke-width="1.8"/>
+<circle cx="200" cy="14" r="2.4" fill="{{ ink.lightened(0.4) }}"/>
+<circle cx="150" cy="14" r="1.8" fill="{{ ink.lightened(0.4) }}"/>
+</g>
+</defs>
+<use xlink:href="#half"/>
+<use xlink:href="#half" transform="matrix(-1 0 0 1 640 0)"/>
+<path d="M320 3 L331 14 L320 25 L309 14 Z" fill="{{ ink }}" stroke="{{ ink.darkened(0.55) }}" stroke-width="1.6"/>
+<path d="M320 7 L327 14 L320 21 L313 14 Z" fill="{{ ink.lightened(0.6) }}" opacity="0.85"/>
+</svg>

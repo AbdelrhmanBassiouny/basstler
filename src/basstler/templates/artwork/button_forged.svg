@@ -1,0 +1,12 @@
+{% set iron = color(palette.border).mixed_with(color("#4A4E57"), 0.6) %}
+{% set fire = color(palette.accent) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+<path d="M3 3 H33 V33 H3 Z M12 12 V24 H24 V12 Z" fill-rule="evenodd" fill="{{ iron }}" stroke="{{ iron.darkened(0.75) }}" stroke-width="1.4"/>
+<path d="M4.6 31 V4.6 H31" fill="none" stroke="{{ iron.lightened(0.55) }}" stroke-width="1.5"/>
+<path d="M31.4 5 V31.4 H5" fill="none" stroke="{{ iron.darkened(0.55) }}" stroke-width="1.5"/>
+<rect x="10.4" y="10.4" width="15.2" height="15.2" fill="none" stroke="{{ fire }}" stroke-width="1.6"/>
+<rect x="11.6" y="11.6" width="12.8" height="12.8" fill="none" stroke="{{ iron.darkened(0.75) }}" stroke-width="0.9"/>
+{% for x, y in [(7, 7), (29, 7), (7, 29), (29, 29)] %}
+<circle cx="{{ x }}" cy="{{ y }}" r="2.2" fill="{{ iron.lightened(0.5) }}" stroke="{{ iron.darkened(0.8) }}" stroke-width="1"/>
+{% endfor %}
+</svg>

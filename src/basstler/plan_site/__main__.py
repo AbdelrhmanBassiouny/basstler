@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import shutil
 import sys
 import tempfile
 from abc import ABC, abstractmethod
@@ -41,7 +42,7 @@ from basstler.github.pull_request_source import (
     PullRequestSource,
 )
 from basstler.github.repository import GitHubAddress, Repository
-from basstler.locations import ProjectLocation
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
@@ -63,6 +64,7 @@ from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Plan
 from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 from basstler.plan_site.plan_page_header import PlanPageHeader
+from basstler.plan_site.theme import SiteAppearance
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -242,6 +244,11 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     When the site is built, which every plan page shows as its last refresh.
     """
 
+    appearance: SiteAppearance = field(default_factory=SiteAppearance, kw_only=True)
+    """
+    The themes every page is drawn in.
+    """
+
     @property
     def stylesheet_url(self) -> str:
         """
@@ -340,7 +347,10 @@ class RepositorySite(SiteSection[RepositorySummary]):
             list(skipped.values()),
         )
         index = RepositoryIndexPage(
-            repository, self.address.hub_url, self.stylesheet_url
+            repository,
+            self.address.hub_url,
+            stylesheet_url=self.stylesheet_url,
+            appearance=self.appearance,
         )
         self.write_page(repository_directory, index.render())
         return repository
@@ -380,6 +390,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             )
         renderer = PlanPage(
             stylesheet_url=self.stylesheet_url,
+            appearance=self.appearance,
             plan=plan,
             roadmap_text=source.roadmap_text,
             repository_rules=self.repository_rules,
@@ -433,10 +444,22 @@ class HubSite(SiteSection[SiteSummary]):
     :meth:`Repository.clone_url_under` takes it.
     """
 
+    appearance: SiteAppearance = field(init=False)
+    """
+    The themes the hub file's appearance section makes of the built-in and the owner's
+    themes.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Read the site's themes out of the hub file.
+        """
+        self.appearance = SiteAppearance(self.hub.appearance)
+
     def build(self, output: Path) -> SiteSummary:
         """
-        Render every repository, then the hub linking them and the stylesheet every page
-        links, then the site's digest.
+        Render every repository, then the hub linking them, the stylesheet every page
+        links and the fonts it names, then the site's digest.
 
         :param output: The directory to write the site into.
         :return: The site's summary, holding every repository's card in the hub file's
@@ -449,9 +472,20 @@ class HubSite(SiteSection[SiteSummary]):
                 )
                 for position, repository in enumerate(self.hub.repositories)
             ]
-        summary = SiteSummary.over_repositories(repositories)
-        self.write_page(output, HubPage(summary, self.stylesheet_url).render())
-        (output / SiteFile.STYLESHEET).write_text(SiteStylesheet().render())
+        summary = SiteSummary.over_repositories(
+            repositories, self.appearance.skipped_themes
+        )
+        hub_page = HubPage(
+            summary, stylesheet_url=self.stylesheet_url, appearance=self.appearance
+        )
+        self.write_page(output, hub_page.render())
+        stylesheet = SiteStylesheet(self.appearance)
+        (output / SiteFile.STYLESHEET).write_text(stylesheet.render())
+        shutil.copytree(
+            PackageLocation.SITE_FONTS,
+            output / PackageLocation.SITE_FONTS.name,
+            dirs_exist_ok=True,
+        )
         (output / SiteFile.NO_JEKYLL).touch()
         SiteDigest(output).write()
         return summary
@@ -477,6 +511,7 @@ class HubSite(SiteSection[SiteSummary]):
             pull_request_source=self.pull_request_source,
             notes=notes,
             built_at=self.built_at,
+            appearance=self.appearance,
         )
         return site.build(output)
 
