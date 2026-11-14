@@ -8,17 +8,11 @@ from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
 
-from basstler.exceptions import DataclassException
+from basstler.github.exceptions import UpstreamReadError
 from basstler.github.repository import Repository
 from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 
 # %% errors
-
-
-class UpstreamReadError(DataclassException, ABC):
-    """
-    Base class for every failure reading an upstream pull request.
-    """
 
 
 @dataclass
@@ -49,27 +43,6 @@ class GitHubCommandFailed(UpstreamReadError):
         return (
             "Check that gh is installed and logged in with read access to the "
             "upstream: gh auth status"
-        )
-
-
-@dataclass
-class GraphQLErrorsReturned(UpstreamReadError):
-    """
-    Raised when GitHub answers with an ``errors`` array instead of data.
-    """
-
-    messages: list[str]
-    """
-    Every message GitHub reported.
-    """
-
-    def error_message(self) -> str:
-        return "GitHub answered with errors: " + "; ".join(self.messages)
-
-    def suggest_correction(self) -> str:
-        return (
-            "Check that the upstream repository and pull request exist and that the "
-            "logged-in account can read them"
         )
 
 

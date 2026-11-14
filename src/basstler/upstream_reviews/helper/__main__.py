@@ -37,9 +37,7 @@ from basstler.class_property import classproperty
 from basstler.github.repository import Repository
 from basstler.github.states import CheckOutcome
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.exceptions import (
-    UpstreamReadError,
-)
+from basstler.github.exceptions import UpstreamReadError
 from basstler.upstream_reviews.failure_logs import (
     FailedJob,
 )

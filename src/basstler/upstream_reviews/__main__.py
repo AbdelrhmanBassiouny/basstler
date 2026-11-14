@@ -32,9 +32,7 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
 )
-from basstler.upstream_reviews.exceptions import (
-    UpstreamReadError,
-)
+from basstler.github.exceptions import UpstreamReadError
 from basstler.upstream_reviews.readers import (
     ReadSource,
 )

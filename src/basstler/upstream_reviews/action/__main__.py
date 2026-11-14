@@ -46,10 +46,8 @@ from basstler.upstream_reviews.action.read import (
     ActionRead,
 )
 from basstler.upstream_reviews.action.run import ActionRun
-from basstler.upstream_reviews.exceptions import (
-    ActionUnavailable,
-    UpstreamReadError,
-)
+from basstler.upstream_reviews.exceptions import ActionUnavailable
+from basstler.github.exceptions import UpstreamReadError
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )

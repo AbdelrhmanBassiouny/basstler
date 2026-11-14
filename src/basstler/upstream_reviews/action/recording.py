@@ -19,11 +19,8 @@ from basstler.upstream_reviews.clients import (
     GraphQLClient,
     JobLogReader,
 )
-from basstler.upstream_reviews.exceptions import (
-    ActionResponseMissing,
-    ActionRunFailed,
-    UpstreamReadError,
-)
+from basstler.upstream_reviews.exceptions import ActionResponseMissing, ActionRunFailed
+from basstler.github.exceptions import UpstreamReadError
 from basstler.upstream_reviews.helper.recording import (
     RecordedJobLog,
 )

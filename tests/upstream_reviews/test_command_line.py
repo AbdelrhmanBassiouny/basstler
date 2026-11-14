@@ -45,10 +45,9 @@ from basstler.upstream_reviews.clients import (
 )
 from basstler.upstream_reviews.exceptions import (
     GitHubCommandFailed,
-    GraphQLErrorsReturned,
     UpstreamPullRequestNotFound,
-    UpstreamReadError,
 )
+from basstler.github.exceptions import GraphQLErrorsReturned, UpstreamReadError
 from basstler.upstream_reviews.failure_logs import (
     FailedJob,
     FailureLog,

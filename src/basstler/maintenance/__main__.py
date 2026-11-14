@@ -43,7 +43,7 @@ from basstler.maintenance.commands import MaintenanceCommand, MaintenancePass
 from basstler.maintenance.upstream_action import UpstreamReadRoute
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.exceptions import UpstreamReadError
+from basstler.github.exceptions import UpstreamReadError
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
