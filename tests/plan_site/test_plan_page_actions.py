@@ -5,13 +5,15 @@ how the page renders it.
 
 from __future__ import annotations
 
+import pytest
+
 from basstler.github.pull_request_state import (
     LivePullRequests,
     PullRequestRecord,
     PullRequestState,
 )
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.cards import ModelOption
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan_site.plan import Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 
@@ -207,7 +209,7 @@ def test_render_omits_action_button_for_a_done_item():
     assert 'data-action-command="' not in output
 
 
-def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
+def render_item_page(*items) -> str:
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
@@ -215,17 +217,43 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", ItemStatus.NOT_STARTED)],
+        items=list(items),
     )
-    renderer = PlanPage(
-        stylesheet_url=STYLESHEET_URL,
-        plan=plan,
-        roadmap_text="",
-        live_pull_requests=LivePullRequests(),
+    return (
+        PlanPage(
+            stylesheet_url=STYLESHEET_URL,
+            plan=plan,
+            roadmap_text="",
+            live_pull_requests=LivePullRequests(),
+        )
+        .render()
+        .html
     )
-    output = renderer.render().html
-    for model in ModelOption:
-        assert f'data-value="{model.value}"' in output
-        assert f">{model.label}</li>" in output
+
+
+def test_render_offers_every_model_alias_and_no_session_default_in_the_dropdown():
+    output = render_item_page(item("a", ItemStatus.NOT_STARTED))
+    for alias in ModelAlias:
+        assert f'data-value="{alias.value}"' in output
+        assert f">{alias.label}</li>" in output
+    assert 'data-value=""' not in output
     assert 'class="model-picker-toggle"' in output
     assert 'class="model-select"' not in output
+
+
+@pytest.mark.parametrize("status", [ItemStatus.NOT_STARTED, ItemStatus.IN_PROGRESS])
+def test_render_preselects_the_items_recommended_model_on_its_action_button(status):
+    alias = ModelAlias.OPUS
+    output = render_item_page(item("a", status, recommended_model=alias))
+    assert f'<span class="model-picker" data-model="{alias.value}"' in output
+    assert f"{alias.label} ▾</button>" in output
+    assert (
+        f'data-value="{alias.value}" onclick="planPageSelectModel(event, this)"'
+        ' class="model-picker-option-selected"'
+    ) in output
+
+
+def test_render_preselects_no_model_for_an_item_with_no_recommendation():
+    output = render_item_page(item("a", ItemStatus.NOT_STARTED))
+    assert '<span class="model-picker" data-model=""' in output
+    assert ' class="model-picker-option-selected"' not in output

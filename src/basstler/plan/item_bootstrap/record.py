@@ -11,6 +11,7 @@ from basstler.plan.item_bootstrap.documents import PlanDocuments
 from basstler.plan.item_bootstrap.exceptions import IncompleteNewItemError
 from basstler.plan.item_bootstrap.manifest_text import ManifestText
 from basstler.plan.item_bootstrap.report import BootstrapReport
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan.model import (
     ItemIndentation,
     ItemStatus,
@@ -51,11 +52,27 @@ class ItemRecordRequest:
     The track the item belongs to, required only when the entry does not exist yet.
     """
 
+    recommended_model: ModelAlias | None = None
+    """
+    The model suited to the item's difficulty; ``None`` leaves an existing item's as it
+    is and gives a new item none.
+    """
+
     roadmap_entry: str | None = None
     """
     A standing rule of the plan the item settled, added to its roadmap; ``None`` leaves
     the roadmap as it is.
     """
+
+    @property
+    def recommended_model_value(self) -> dict[ManifestKey, str]:
+        """
+        :return: The manifest value to write for :attr:`recommended_model`, empty when it
+            is not set.
+        """
+        if self.recommended_model is None:
+            return {}
+        return {ManifestKey.RECOMMENDED_MODEL: self.recommended_model.value}
 
     def render_new_item(self, indentation: ItemIndentation) -> str:
         """
@@ -79,6 +96,7 @@ class ItemRecordRequest:
             ManifestKey.TRACK: self.track,
             ManifestKey.DEPENDS_ON: (),
             ManifestKey.STATUS: self.status.value,
+            **self.recommended_model_value,
         }
         return ManifestKey.IDENTIFIER.render(
             self.item_identifier, opening_the_item=True, indentation=indentation
@@ -119,7 +137,7 @@ class ItemRecordRequest:
             manifest_text = manifest.with_item_fields(
                 self.plan_identifier,
                 self.item_identifier,
-                {ManifestKey.STATUS: self.status.value},
+                {ManifestKey.STATUS: self.status.value, **self.recommended_model_value},
             )
         documents.save(
             manifest_text, self.roadmap_after(documents.roadmap_text), project_root

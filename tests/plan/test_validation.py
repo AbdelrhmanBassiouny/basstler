@@ -25,6 +25,7 @@ from basstler.exceptions import (
     SharedBranch,
     UnknownDependency,
     UnknownDependencyPlan,
+    UnknownRecommendedModel,
     UnknownStatus,
     UnknownTrack,
     UnknownWave,
@@ -35,6 +36,7 @@ from basstler.plan.dependencies import (
     PlanDirectory,
 )
 from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan.validation import PlanValidator
 
 from ..constants.paths import DatasetLocation
@@ -141,6 +143,21 @@ def test_validation_rejects_unknown_status():
     with pytest.raises(PlanValidationError) as error:
         PlanValidator(minimal_plan(items=items)).validate()
     assert any(isinstance(problem, UnknownStatus) for problem in error.value.problems)
+
+
+def test_validation_rejects_a_recommended_model_that_is_no_alias():
+    items = [manifest_item("a", recommended_model="claude-opus-5")]
+    with pytest.raises(PlanValidationError) as error:
+        PlanValidator(minimal_plan(items=items)).validate()
+    assert any(
+        isinstance(problem, UnknownRecommendedModel) for problem in error.value.problems
+    )
+
+
+@pytest.mark.parametrize("recommended_model", [None, *ModelAlias])
+def test_validation_accepts_every_alias_and_an_item_without_one(recommended_model):
+    items = [manifest_item("a", recommended_model=recommended_model)]
+    PlanValidator(minimal_plan(items=items)).validate()
 
 
 @pytest.mark.parametrize("status", ["in_progress", ItemStatus.IN_PROGRESS.value])

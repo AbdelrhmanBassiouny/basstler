@@ -351,6 +351,11 @@ class ManifestKey(KeySpecification, Enum):
     The session's own planning assessment - see :class:`ItemStatus`.
     """
 
+    RECOMMENDED_MODEL = ("recommended_model",)
+    """
+    The Claude model suited to the item's difficulty - see :class:`ModelAlias`.
+    """
+
     SESSION = ("session",)
     """
     The session doing the work.

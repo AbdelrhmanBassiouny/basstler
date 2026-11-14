@@ -208,7 +208,10 @@ class ItemClassifier:
             case ItemStatus.DEFERRED:
                 label = "Reconsider"
         return ResolveAction(
-            label=label, plan_id=self.plan.id, item_identifier=item.identifier
+            label=label,
+            plan_id=self.plan.id,
+            item_identifier=item.identifier,
+            recommended_model=item.recommended_model,
         )
 
     def _start_action_for(self, item: Item) -> StartNowAction:
@@ -219,6 +222,7 @@ class ItemClassifier:
             label="Start now",
             plan_id=self.plan.id,
             item_identifier=item.identifier,
+            recommended_model=item.recommended_model,
         )
 
     def _pending_start_action_for(self, item: Item) -> StartNowAction | None:

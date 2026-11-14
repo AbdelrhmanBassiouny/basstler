@@ -9,6 +9,7 @@ import subprocess
 
 from basstler.plan.item_bootstrap.commands import BootstrapCommand
 from basstler.plan.item_bootstrap.vocabulary import PlanItemBootstrapExitCode, ReportKey
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
@@ -84,6 +85,36 @@ def test_the_record_subcommand_reports_status_and_exit_code_first(
         report[ReportKey.STATUS] == PlanItemBootstrapExitCode.SUCCESS.name_for_a_caller
     )
     assert report[ReportKey.EXIT_CODE] == PlanItemBootstrapExitCode.SUCCESS
+
+
+def test_the_record_subcommand_writes_the_recommended_model_it_is_given(
+    bootstrap_repository: ScratchRepository,
+):
+    result = run_bootstrap(
+        bootstrap_repository,
+        *record_arguments(
+            PLAN_IDENTIFIER, "--recommended-model", ModelAlias.SONNET.value
+        ),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        published_items(bootstrap_repository)[EXISTING_ITEM][
+            ManifestKey.RECOMMENDED_MODEL.key
+        ]
+        == ModelAlias.SONNET
+    )
+
+
+def test_the_record_subcommand_refuses_a_model_that_is_no_alias(
+    bootstrap_repository: ScratchRepository,
+):
+    result = run_bootstrap(
+        bootstrap_repository,
+        *record_arguments(PLAN_IDENTIFIER, "--recommended-model", "claude-opus-5"),
+    )
+
+    assert result.returncode == PlanItemBootstrapExitCode.USAGE
 
 
 def test_the_command_line_names_the_status_it_failed_with(

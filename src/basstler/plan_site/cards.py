@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
+from basstler.plan.model_alias import ModelAlias
 from basstler.github.repository import Repository
 from basstler.stack.promotability import PromotionBlocker
 
@@ -224,6 +225,9 @@ class ItemAction(ABC):
     item_identifier: str
     """The item this action's command targets."""
 
+    recommended_model: ModelAlias | None = None
+    """The model the button's picker preselects, or ``None`` to preselect none."""
+
     @classproperty
     @abstractmethod
     def skill_command_name(cls) -> str:
@@ -260,48 +264,6 @@ class ResolveAction(ItemAction):
     def skill_command_name(cls) -> str:
         """:return: The ``plan-item-resolve`` skill."""
         return "/plan-item-resolve"
-
-
-class ModelOption(StrEnum):
-    """One choice in a action button's model dropdown, in the order the
-    dropdown lists them.
-
-    Every model is offered on every page - not plan-specific, so declared once
-    here rather than threaded through :class:`Plan`. A member is its own model
-    id, the one to prepend as ``/model <value>`` before the copied command, or
-    ``""`` to copy the command alone and inherit whatever model the
-    pasted-into session is already running.
-    """
-
-    label: str
-    """The human-readable label shown in the dropdown."""
-
-    def __new__(cls, model_identifier: str, label: str) -> ModelOption:
-        """Make a member that is its own model id and carries its dropdown label.
-
-        :param model_identifier: The model id, or ``""`` for the session default.
-        :param label: The human-readable label shown in the dropdown.
-        :return: The member.
-        """
-        member = str.__new__(cls, model_identifier)
-        member._value_ = model_identifier
-        member.label = label
-        return member
-
-    SESSION_DEFAULT = ("", "Session default")
-    """Inherit whatever model the pasted-into session is already running."""
-
-    OPUS_5 = ("claude-opus-5", "Opus 5")
-    """Claude Opus 5."""
-
-    SONNET_5 = ("claude-sonnet-5", "Sonnet 5")
-    """Claude Sonnet 5."""
-
-    HAIKU_4_5 = ("claude-haiku-4-5-20251001", "Haiku 4.5")
-    """Claude Haiku 4.5."""
-
-    FABLE_5 = ("claude-fable-5", "Fable 5")
-    """Claude Fable 5."""
 
 
 # %% promotion button

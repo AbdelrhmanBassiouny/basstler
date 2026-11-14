@@ -14,7 +14,8 @@ from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
 from basstler.plan.repository_rules import RepositoryRules
-from basstler.plan_site.cards import ModelOption, TrackSection, WaveSection
+from basstler.plan.model_alias import ModelAlias
+from basstler.plan_site.cards import TrackSection, WaveSection
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
@@ -139,7 +140,7 @@ class PlanPage(TemplatePage):
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             repository_rules=self.repository_rules.rules,
             waves=self._wave_sections(),
-            available_models=list(ModelOption),
+            available_models=list(ModelAlias),
         )
         return RenderedPlanPage(html=html, overview=overview)
 
