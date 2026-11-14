@@ -5,11 +5,14 @@ each one ships.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from functools import cached_property
 from itertools import combinations
+from pathlib import Path
 
 import rustworkx
 
@@ -253,6 +256,22 @@ class PackageMap(Mapping[Distribution, DistributionDeclaration]):
             key=lambda claim: claim[0],
         )
         return declaration if claim_length else None
+
+    @staticmethod
+    def declared_in(module_file: Path) -> PackageMap:
+        """
+        Load another copy of this module, such as one checked out at an earlier commit.
+
+        :param module_file: The copy's source file.
+        :return: The map the copy declares as :data:`PACKAGE_MAP`.
+        """
+        specification = importlib.util.spec_from_file_location(
+            f"{__name__}@{module_file.resolve()}", module_file
+        )
+        module = importlib.util.module_from_spec(specification)
+        sys.modules[specification.name] = module
+        specification.loader.exec_module(module)
+        return module.PACKAGE_MAP
 
 
 # %% this package's map

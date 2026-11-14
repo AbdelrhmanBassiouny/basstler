@@ -52,7 +52,7 @@ jobs:
     env:
       BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
-      # The base commit is checked out next to the change to compare its crossings.
+      # The base commit is checked out in a worktree to compare its crossings.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -77,23 +77,8 @@ jobs:
       - name: Install basstler
         run: pip install --editable .
 
-      # The base is listed with its own code and its own package map, so a crossing that
-      # only a change of the map creates is new as well.
-      - name: List the base's crossings
-        id: base
-        run: |
-          git worktree add "$RUNNER_TEMP/base" "$BASE_COMMIT"
-          cd "$RUNNER_TEMP/base"
-          if [ ! -f src/basstler/package_map.py ]; then
-            echo "::notice::The base declares no package map, so there is nothing to compare."
-            exit 0
-          fi
-          PYTHONPATH=src python -m basstler code-rules crossings "$RUNNER_TEMP/base-crossings.json"
-          echo "listed=true" >> "$GITHUB_OUTPUT"
-
       - name: Fail on a crossing the base does not have
-        if: steps.base.outputs.listed == 'true'
-        run: python -m basstler code-rules new-crossings "$RUNNER_TEMP/base-crossings.json" --base-commit "$BASE_COMMIT"
+        run: python -m basstler code-rules new-crossings "$BASE_COMMIT"
 
   # Past a daily ceiling a pull request's matrix is skipped, unless it carries the
   # budget-override label. A push to main always runs it, since its pass is what releases.

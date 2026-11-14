@@ -31,7 +31,7 @@ class CodeRulesCommand(StrEnum):
 
     NEW_CROSSINGS = "new-crossings"
     """
-    Report the boundary crossings a base checkout's listing does not hold.
+    Report the boundary crossings a base commit does not have.
     """
 
     AGENTS_MD = "agents-md"

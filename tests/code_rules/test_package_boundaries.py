@@ -13,15 +13,11 @@ import pytest
 from basstler.code_rules.package_boundaries import (
     BoundaryCrossing,
     ModuleRenames,
+    PackageAtCommit,
     PackageBoundaryChecker,
     PackageCrossings,
 )
-from basstler.package_map import (
-    Distribution,
-    DistributionDeclaration,
-    Layer,
-    PackageMap,
-)
+from basstler.package_map import PackageMap
 
 from ..constants.paths import PackageBoundarySnippet
 
@@ -31,19 +27,9 @@ from ..constants.paths import PackageBoundarySnippet
 @pytest.fixture
 def package_map() -> PackageMap:
     """
-    :return: The dataset's map, where a higher distribution lists a lower one.
+    :return: The map the dataset's package declares.
     """
-    return PackageMap(
-        (
-            DistributionDeclaration(Distribution.CORE, Layer.CORE, ("low",)),
-            DistributionDeclaration(
-                Distribution.GIT,
-                Layer.LOCAL_TOOLS,
-                ("high",),
-                (Distribution.CORE,),
-            ),
-        )
-    )
+    return PackageMap.declared_in(PackageBoundarySnippet.PACKAGE_MAP.value)
 
 
 @pytest.fixture
@@ -192,3 +178,50 @@ def test_a_module_git_detects_as_moved_is_renamed(moved_package, scratch_reposit
     assert checker.module_renames(scratch_repository.git, base_commit) == (
         ModuleRenames({"low.upward": "low.moved"})
     )
+
+
+# %% the package at another commit
+
+
+def test_the_package_at_a_commit_is_read_under_that_commit_s_map(
+    moved_package, scratch_repository, checker
+):
+    """
+    The base commit's package holds the crossings under the names it had then.
+    """
+    moved_checker, base_commit = moved_package
+
+    with PackageAtCommit(
+        scratch_repository.git, base_commit, moved_checker.package_directory
+    ) as base_checker:
+        base_crossings = base_checker.package_crossings()
+
+    assert base_crossings == checker.package_crossings()
+
+
+def test_the_package_at_a_commit_is_removed_on_exit(moved_package, scratch_repository):
+    """
+    Reading the base leaves no worktree behind.
+    """
+    moved_checker, base_commit = moved_package
+    package_at_commit = PackageAtCommit(
+        scratch_repository.git, base_commit, moved_checker.package_directory
+    )
+
+    with package_at_commit:
+        pass
+
+    assert not package_at_commit.directory.exists()
+
+
+def test_a_commit_declaring_no_map_has_no_checker(scratch_repository):
+    """
+    A commit from before the package declared a map has nothing to compare.
+    """
+    package = scratch_repository.project_root / PackageBoundarySnippet.PACKAGE.name
+    shutil.copytree(PackageBoundarySnippet.PACKAGE.value, package)
+    (package / PackageBoundarySnippet.PACKAGE_MAP.name).unlink()
+    scratch_repository.commit_everything("add the package without its map")
+
+    with PackageAtCommit(scratch_repository.git, "HEAD", package) as base_checker:
+        assert base_checker is None

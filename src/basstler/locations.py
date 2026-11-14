@@ -89,6 +89,11 @@ class PackageLocation(PathEnumeration):
     The templates the plan site's pages are rendered from.
     """
 
+    PACKAGE_MAP = DIRECTORY / "package_map.py"
+    """
+    The module declaring which distribution ships each of the package's modules.
+    """
+
     QUERIES = DIRECTORY / "github" / "queries"
     """
     The GraphQL documents the upstream review reader sends.

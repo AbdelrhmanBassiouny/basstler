@@ -4,6 +4,8 @@ Tests for the ``basstler code-rules`` commands.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from basstler.code_rules.command_line import (
@@ -14,6 +16,10 @@ from basstler.code_rules.command_line import (
     report_new_crossings,
 )
 from basstler.code_rules.instructions import AgentsInstructions
+from basstler.code_rules.package_boundaries import (
+    PackageBoundaryChecker,
+    PackageCrossings,
+)
 
 from ..constants.paths import DocstringSnippet, ProseSnippet
 
@@ -41,28 +47,24 @@ def test_checking_passes_when_nothing_breaks_a_rule():
 # %% boundary crossings
 
 
-def test_a_package_compared_with_its_own_listing_has_no_new_crossing(tmp_path):
+def test_the_listing_holds_every_crossing_the_package_has(tmp_path):
     """
-    The listing the command writes holds every crossing the package has.
+    The listing the command writes holds the crossings the checker finds.
     """
     listing = tmp_path / "crossings.json"
 
     list_crossings(listing)
 
-    assert report_new_crossings(listing) == CodeRulesExitCode.SUCCESS
-
-
-def test_a_package_compared_with_its_own_commit_has_no_new_crossing(tmp_path):
-    """
-    Against the commit checked out, no module moved, so the listing holds every crossing
-    under its current name.
-    """
-    listing = tmp_path / "crossings.json"
-    list_crossings(listing)
-
-    assert report_new_crossings(listing, base_commit="HEAD") == (
-        CodeRulesExitCode.SUCCESS
+    assert PackageCrossings.from_json(json.loads(listing.read_text())) == (
+        PackageBoundaryChecker().package_crossings()
     )
+
+
+def test_a_package_compared_with_its_own_commit_has_no_new_crossing():
+    """
+    Against the commit checked out, the base holds every crossing the package has.
+    """
+    assert report_new_crossings("HEAD") == CodeRulesExitCode.SUCCESS
 
 
 # %% generating AGENTS.md

@@ -5,9 +5,12 @@ Finds imports that cross from one distribution into another it does not list.
 from __future__ import annotations
 
 import ast
+import shutil
+import tempfile
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import TracebackType
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
 from basstler.git.commands import GitCommandRunner
@@ -260,3 +263,64 @@ class PackageBoundaryChecker(CodeRuleChecker):
         if location.is_dir() or location.with_suffix(".py").is_file():
             return candidate
         return package
+
+
+# %% the package at another commit
+
+
+@dataclass
+class PackageAtCommit:
+    """
+    The package as one commit holds it, in a detached worktree removed on exit.
+    """
+
+    git: GitCommandRunner
+    """
+    The checkout the worktree is added to.
+    """
+
+    commit: str
+    """
+    The commit checked out.
+    """
+
+    package_directory: Path
+    """
+    The ``basstler`` package directory in :attr:`git`'s checkout.
+    """
+
+    directory: Path = field(init=False)
+    """
+    The worktree's root, once entered.
+    """
+
+    def __enter__(self) -> PackageBoundaryChecker | None:
+        """
+        :return: A checker of the package at :attr:`commit`, under the package map that
+            commit declares; none when it declares no map.
+        """
+        self.directory = Path(tempfile.mkdtemp())
+        self.git.run(
+            "worktree", "add", "--detach", "--quiet", str(self.directory), self.commit
+        )
+        package = self.directory / self.package_directory.resolve().relative_to(
+            self.git.working_directory.resolve()
+        )
+        map_file = package / PackageLocation.PACKAGE_MAP.relative_to(
+            PackageLocation.DIRECTORY
+        )
+        if not map_file.is_file():
+            return None
+        return PackageBoundaryChecker(PackageMap.declared_in(map_file), package)
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """
+        Remove the worktree, whether or not the package was read.
+        """
+        self.git.attempt("worktree", "remove", "--force", str(self.directory))
+        shutil.rmtree(self.directory, ignore_errors=True)
