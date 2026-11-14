@@ -5,7 +5,6 @@ The ``basstler code-rules`` commands: checking code against the rules, and gener
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from cyclopts import App
@@ -75,19 +74,6 @@ def check(
         logger.error(violation.render())
     if violations:
         return CodeRulesExitCode.CHANGES_NEEDED
-    return CodeRulesExitCode.SUCCESS
-
-
-@code_rules_app.command(name=CodeRulesCommand.CROSSINGS)
-def list_crossings(output: Path) -> CodeRulesExitCode:
-    """
-    Write every import of the package that crosses a distribution boundary to *output*.
-
-    :param output: The JSON file to write the crossings to.
-    """
-    crossings = PackageBoundaryChecker().package_crossings()
-    output.write_text(json.dumps(crossings.to_json(), indent=2) + "\n")
-    logger.info("Wrote %d crossings to %s", len(crossings.crossings), output)
     return CodeRulesExitCode.SUCCESS
 
 

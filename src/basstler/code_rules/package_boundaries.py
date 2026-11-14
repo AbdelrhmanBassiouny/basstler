@@ -14,7 +14,6 @@ from types import TracebackType
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
 from basstler.git.commands import GitCommandRunner
-from basstler.json_model import ValidatedJSONModel
 from basstler.locations import PackageLocation
 from basstler.package_map import PACKAGE_MAP, PackageMap
 
@@ -38,7 +37,8 @@ class ModuleImport:
     """
 
 
-class BoundaryCrossing(ValidatedJSONModel):
+@dataclass(frozen=True)
+class BoundaryCrossing:
     """
     A module importing a module of a distribution its own distribution does not list.
     """
@@ -74,7 +74,8 @@ class ModuleRenames:
         return self.new_name_by_old_name.get(module, module)
 
 
-class PackageCrossings(ValidatedJSONModel):
+@dataclass(frozen=True)
+class PackageCrossings:
     """
     Every boundary crossing of one checkout of the package.
     """

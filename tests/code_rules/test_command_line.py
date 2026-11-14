@@ -4,22 +4,15 @@ Tests for the ``basstler code-rules`` commands.
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from basstler.code_rules.command_line import (
     CodeRulesExitCode,
     check,
     generate_agents_instructions,
-    list_crossings,
     report_new_crossings,
 )
 from basstler.code_rules.instructions import AgentsInstructions
-from basstler.code_rules.package_boundaries import (
-    PackageBoundaryChecker,
-    PackageCrossings,
-)
 
 from ..constants.paths import DocstringSnippet, ProseSnippet
 
@@ -45,19 +38,6 @@ def test_checking_passes_when_nothing_breaks_a_rule():
 
 
 # %% boundary crossings
-
-
-def test_the_listing_holds_every_crossing_the_package_has(tmp_path):
-    """
-    The listing the command writes holds the crossings the checker finds.
-    """
-    listing = tmp_path / "crossings.json"
-
-    list_crossings(listing)
-
-    assert PackageCrossings.from_json(json.loads(listing.read_text())) == (
-        PackageBoundaryChecker().package_crossings()
-    )
 
 
 def test_a_package_compared_with_its_own_commit_has_no_new_crossing():
