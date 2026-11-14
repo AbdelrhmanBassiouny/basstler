@@ -20,8 +20,11 @@ items:
 - id: per-skill-setup-gates
   title: Each skill's prerequisite check reads only the setup rows it needs
   track: guards
+  branch: claude/plan-item-kickoff-basstler-reliability-t6szdl
+  pull_request_number: 216
+  session: https://claude.ai/code/session_018wfiv8PysLKLcPoZsGDypF
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup
     sends every skill into /setup-personal-notes. Each skill names its rows with --only (in
     code, as a mapping from skill to checks, not prose), and an unrelated row is reported
