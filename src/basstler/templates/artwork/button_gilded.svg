@@ -1,0 +1,11 @@
+{% set gold = color(palette.accent) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+<path d="M9 3 H27 L33 9 V27 L27 33 H9 L3 27 V9 Z M12 12 V24 H24 V12 Z" fill-rule="evenodd" fill="{{ gold }}" stroke="{{ gold.darkened(0.6) }}" stroke-width="1.4"/>
+<path d="M9.5 5.4 H26.5 L30.6 9.6" fill="none" stroke="{{ gold.lightened(0.65) }}" stroke-width="1.6"/>
+<path d="M5.4 26.5 L9.6 30.6 H26.5 L30.6 26.5 V12" fill="none" stroke="{{ gold.darkened(0.4) }}" stroke-width="1.6"/>
+<path d="M5.4 26 V9.6 L9 6" fill="none" stroke="{{ gold.lightened(0.5) }}" stroke-width="1.2"/>
+<rect x="11.3" y="11.3" width="13.4" height="13.4" fill="none" stroke="{{ gold.darkened(0.6) }}" stroke-width="1.2"/>
+{% for x, y in [(7.5, 7.5), (28.5, 7.5), (7.5, 28.5), (28.5, 28.5)] %}
+<circle cx="{{ x }}" cy="{{ y }}" r="2.3" fill="{{ gold.lightened(0.7) }}" stroke="{{ gold.darkened(0.6) }}" stroke-width="0.9"/>
+{% endfor %}
+</svg>

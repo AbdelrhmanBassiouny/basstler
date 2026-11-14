@@ -21,8 +21,13 @@ light: {background, surface, surface_alternate, text, text_muted, border, accent
 dark: {the same keys}
 style:                         # optional, each key optional
   body_font / heading_font / monospace_font   # CSS font lists
+  heading_case                 # as-written, uppercase or small-capitals
+  heading_letter_spacing       # px, rem or em
+  heading_italic               # true or false
   corner_radius / small_corner_radius / border_width   # px, rem or em
-  frame                        # flat, raised, beveled, carved (border_width >= 3px) or metal (riveted, accent-coloured; 5-6px)
+  frame                        # flat, raised, beveled, carved (border_width >= 3px), or a picture frame: gilded, vine, lace, forged
+  backdrop                     # none, stars, embers, fireflies or petals
+  animated                     # true or false
   chip_shape                   # pill, rounded, square or notched
   ornament                     # up to 4 characters before each page's eyebrow
   transition_duration          # ms or s

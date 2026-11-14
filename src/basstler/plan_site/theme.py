@@ -1,6 +1,6 @@
 """
-The plan site's themes: the colours, type, frames, chip shapes, ornament and motion a viewer picks
-on the page, and the contrast every theme's text must reach before it is published.
+The plan site's themes: the colours, type, frames, backdrops, chip shapes and motion a viewer
+picks on the page, and the contrast every theme's text must reach before it is published.
 """
 
 from __future__ import annotations
@@ -22,6 +22,11 @@ from basstler.plan_site.exceptions import NoPublishableThemeError
 MINIMUM_TEXT_CONTRAST = 4.5
 """
 The contrast ratio WCAG 2 level AA requires between normal-size text and its background.
+"""
+
+BACKDROP_INK_SHARE = 0.14
+"""
+The most of the text colour a backdrop's scene mixes into the background.
 """
 
 # %% validated values
@@ -152,6 +157,38 @@ class Color:
         if encoded <= 0.04045:
             return encoded / 12.92
         return ((encoded + 0.055) / 1.055) ** 2.4
+
+    def __str__(self) -> str:
+        return self.hexadecimal
+
+    def mixed_with(self, other: Color, share: float) -> Color:
+        """
+        :param other: The colour mixed in.
+        :param share: How much of *other* the mix holds, from 0 for none to 1 for all.
+        :return: The two colours mixed channel by channel.
+        """
+        channels = (
+            round(
+                int(self.hexadecimal[start : start + 2], 16) * (1 - share)
+                + int(other.hexadecimal[start : start + 2], 16) * share
+            )
+            for start in (1, 3, 5)
+        )
+        return Color("#" + "".join(f"{channel:02X}" for channel in channels))
+
+    def lightened(self, share: float) -> Color:
+        """
+        :param share: How much white is mixed in, from 0 to 1.
+        :return: The colour mixed with white.
+        """
+        return self.mixed_with(Color("#FFFFFF"), share)
+
+    def darkened(self, share: float) -> Color:
+        """
+        :param share: How much black is mixed in, from 0 to 1.
+        :return: The colour mixed with black.
+        """
+        return self.mixed_with(Color("#000000"), share)
 
     def contrast_with(self, other: Color) -> float:
         """
@@ -303,6 +340,32 @@ class Palette(ValidatedJSONModel):
     Behind chips with nothing to report.
     """
 
+    def scene_ink(self, depth: float) -> Color:
+        """
+        :param depth: How near the painted thing is, from 0 for the horizon to 1.
+        :return: The background tinted towards the text colour, by at most
+            :data:`BACKDROP_INK_SHARE`.
+        """
+        return Color(self.background).mixed_with(
+            Color(self.text), depth * BACKDROP_INK_SHARE
+        )
+
+    @property
+    def backdrop_pairings(self) -> list[ColorPairing]:
+        """
+        Every pairing of text and the darkest ink of a backdrop's scene.
+        """
+        return [
+            ColorPairing(
+                f"{description} on the backdrop", Color(foreground), self.scene_ink(1)
+            )
+            for description, foreground in (
+                ("text", self.text),
+                ("muted text", self.text_muted),
+                ("links", self.accent_strong),
+            )
+        ]
+
     @property
     def text_pairings(self) -> list[ColorPairing]:
         """
@@ -368,10 +431,32 @@ class Frame(StrEnum):
     Double-ruled, sunken panels and engraved chips.
     """
 
-    METAL = "metal"
+    GILDED = "gilded"
     """
-    Square, riveted frames of polished metal in the accent colour, and embossed chips.
+    Thick gilded mouldings with scrolled corners, each set with a gem.
     """
+
+    VINE = "vine"
+    """
+    Carved wood twined with a leafy vine, and berries at the corners.
+    """
+
+    LACE = "lace"
+    """
+    A satin ribbon edged with scalloped lace, and a rose at each corner.
+    """
+
+    FORGED = "forged"
+    """
+    Wrought iron with a molten seam, scrolled corners and flames.
+    """
+
+    @property
+    def is_drawn_from_artwork(self) -> bool:
+        """
+        Whether the frame is a picture, drawn in the theme's colours, instead of a border.
+        """
+        return self in (Frame.GILDED, Frame.VINE, Frame.LACE, Frame.FORGED)
 
 
 class ChipShape(StrEnum):
@@ -397,6 +482,60 @@ class ChipShape(StrEnum):
     NOTCHED = "notched"
     """
     Corners cut off at an angle.
+    """
+
+
+class HeadingCase(StrEnum):
+    """
+    How a theme sets the letters of its headings.
+    """
+
+    AS_WRITTEN = "as-written"
+    """
+    The letters as the heading's text has them.
+    """
+
+    UPPERCASE = "uppercase"
+    """
+    Every letter a capital.
+    """
+
+    SMALL_CAPITALS = "small-capitals"
+    """
+    Lowercase letters drawn as small capitals.
+    """
+
+
+class Backdrop(StrEnum):
+    """
+    The scene along the foot of the page and what drifts across it.
+
+    .. note:: A scene is painted in :meth:`Palette.scene_ink`, which text is checked on.
+    """
+
+    NONE = "none"
+    """
+    The plain background colour.
+    """
+
+    STARS = "stars"
+    """
+    A citadel on a crag under a crescent moon, with dragons, a wizard and knights.
+    """
+
+    EMBERS = "embers"
+    """
+    A volcano, a furnace hall, gears and smiths at the anvil, with sparks rising.
+    """
+
+    FIREFLIES = "fireflies"
+    """
+    A moonlit pine forest with a great tree, an owl, stags and a fairy, and fireflies.
+    """
+
+    PETALS = "petals"
+    """
+    A garden with blossom trees, a gazebo, swans and cats, with petals falling.
     """
 
 
@@ -429,6 +568,21 @@ class ThemeStyle(ValidatedJSONModel):
     The font of chips, ids and code.
     """
 
+    heading_case: HeadingCase = HeadingCase.AS_WRITTEN
+    """
+    How the letters of headings and buttons are set.
+    """
+
+    heading_letter_spacing: CSSLength = "0em"
+    """
+    The space added between the letters of headings and buttons.
+    """
+
+    heading_italic: bool = False
+    """
+    Whether headings are set in italics.
+    """
+
     corner_radius: CSSLength = "10px"
     """
     The corner radius of cards and panels.
@@ -457,6 +611,17 @@ class ThemeStyle(ValidatedJSONModel):
     chip_shape: ChipShape = ChipShape.PILL
     """
     The outline of chips.
+    """
+
+    backdrop: Backdrop = Backdrop.NONE
+    """
+    The scene behind the page.
+    """
+
+    animated: bool = False
+    """
+    Whether cards arrive, glow and shimmer and the backdrop drifts; never when the
+    viewer asks for reduced motion.
     """
 
     transition_duration: CSSDuration = "120ms"
@@ -496,6 +661,15 @@ class SiteTheme(ValidatedJSONModel):
     The theme's type, borders, ornament and motion.
     """
 
+    def pairings_of(self, palette: Palette) -> list[ColorPairing]:
+        """
+        :param palette: The theme's light or dark colours.
+        :return: Every pairing of text and background the theme shows in *palette*.
+        """
+        if self.style.backdrop is Backdrop.NONE:
+            return palette.text_pairings
+        return palette.text_pairings + palette.backdrop_pairings
+
     @property
     def unreadable_pairings(self) -> list[str]:
         """
@@ -508,7 +682,7 @@ class SiteTheme(ValidatedJSONModel):
                 (ColorScheme.LIGHT, self.light),
                 (ColorScheme.DARK, self.dark),
             )
-            for pairing in palette.text_pairings
+            for pairing in self.pairings_of(palette)
             if not pairing.is_readable
         ]
 
@@ -538,23 +712,23 @@ class BuiltInTheme(PathEnumeration):
 
     ROSE = PackageLocation.TEMPLATES.value / "themes" / "rose.yaml"
     """
-    Rose and plum with serif headings and cushioned, raised panels.
+    Rose and plum with serif headings, lace frames set with roses, and falling petals.
     """
 
     FORGE = PackageLocation.TEMPLATES.value / "themes" / "forge.yaml"
     """
-    Ember on iron, with monospace headings and chiselled, bevelled frames.
+    Ember on iron, with monospace headings, wrought-iron frames and rising sparks.
     """
 
     ELDERWOOD = PackageLocation.TEMPLATES.value / "themes" / "elderwood.yaml"
     """
-    Forest green and gold on parchment, with book-face headings, carved panels and a
-    fleuron.
+    Forest green and gold on parchment, with book-face headings, vine-twined frames and
+    fireflies.
     """
 
     CITADEL = PackageLocation.TEMPLATES.value / "themes" / "citadel.yaml"
     """
-    Gold on night slate, with riveted metal frames, notched chips and carved capitals.
+    Gold on night slate, with gilded, gem-set frames, notched chips and a starlit citadel.
     """
 
     @property

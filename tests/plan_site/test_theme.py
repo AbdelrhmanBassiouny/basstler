@@ -8,6 +8,7 @@ from __future__ import annotations
 import sys
 from dataclasses import replace
 from pathlib import Path
+from urllib.parse import quote
 
 import pydantic
 import pytest
@@ -19,11 +20,13 @@ from basstler.plan_site.theme import (
     AppearanceAttribute,
     AppearanceSettings,
     AppearanceStorageKey,
+    Backdrop,
     BuiltInTheme,
     ChipShape,
     Color,
     ColorScheme,
     Frame,
+    HeadingCase,
     SiteAppearance,
     SiteTheme,
     SkippedTheme,
@@ -61,6 +64,19 @@ def faint_theme() -> SiteTheme:
 
 
 # %% contrast
+
+
+def test_two_colours_mix_channel_by_channel():
+    assert Color("#000000").mixed_with(Color("#FFFFFF"), 0.2) == Color("#333333")
+
+
+def test_a_colour_fully_lightened_is_white_and_fully_darkened_is_black():
+    colour = Color("#3A7CA5")
+
+    assert (colour.lightened(1), colour.darkened(1)) == (
+        Color("#FFFFFF"),
+        Color("#000000"),
+    )
 
 
 def test_black_on_white_has_the_highest_contrast_wcag_defines():
@@ -114,10 +130,21 @@ def test_a_frame_the_site_does_not_draw_is_refused():
         ThemeStyle.from_json({"frame": "glass"})
 
 
-def test_a_theme_file_names_its_frame_and_chip_shape(readable_theme: SiteTheme):
-    assert (readable_theme.style.frame, readable_theme.style.chip_shape) == (
-        Frame.METAL,
+def test_a_backdrop_the_site_does_not_draw_is_refused():
+    with pytest.raises(pydantic.ValidationError):
+        ThemeStyle.from_json({"backdrop": "aurora"})
+
+
+def test_a_theme_file_names_its_frame_backdrop_and_chip_shape(
+    readable_theme: SiteTheme,
+):
+    style = readable_theme.style
+
+    assert (style.frame, style.backdrop, style.chip_shape, style.animated) == (
+        Frame.GILDED,
+        Backdrop.STARS,
         ChipShape.NOTCHED,
+        True,
     )
 
 
@@ -232,6 +259,67 @@ def test_every_frame_draws_its_own_shape(readable_theme: SiteTheme):
     }
 
     assert len(declarations) == len(Frame)
+
+
+def test_a_frame_drawn_from_artwork_is_painted_in_the_theme_s_accent(
+    readable_theme: SiteTheme,
+):
+    assert readable_theme.style.frame.is_drawn_from_artwork
+    assert quote(readable_theme.light.accent) in theme_declaration(readable_theme)
+
+
+def test_every_backdrop_draws_its_own_scene(readable_theme: SiteTheme):
+    declarations = {
+        theme_declaration(
+            replace(
+                readable_theme, style=replace(readable_theme.style, backdrop=backdrop)
+            )
+        )
+        for backdrop in Backdrop
+    }
+
+    assert len(declarations) == len(Backdrop)
+
+
+def test_a_scene_is_painted_in_the_ink_text_is_checked_on(readable_theme: SiteTheme):
+    ink = readable_theme.light.scene_ink(1)
+
+    assert quote(f'fill="{ink}"') in theme_declaration(readable_theme)
+    assert ink in {
+        pairing.background for pairing in readable_theme.light.backdrop_pairings
+    }
+
+
+def test_a_theme_with_a_backdrop_is_checked_against_its_scene(
+    readable_theme: SiteTheme,
+):
+    plain = replace(
+        readable_theme, style=replace(readable_theme.style, backdrop=Backdrop.NONE)
+    )
+
+    assert plain.pairings_of(plain.light) == plain.light.text_pairings
+    assert readable_theme.pairings_of(readable_theme.light) == (
+        readable_theme.light.text_pairings + readable_theme.light.backdrop_pairings
+    )
+
+
+def test_every_heading_case_sets_its_own_letters(readable_theme: SiteTheme):
+    declarations = {
+        theme_declaration(
+            replace(
+                readable_theme, style=replace(readable_theme.style, heading_case=case)
+            )
+        )
+        for case in HeadingCase
+    }
+
+    assert len(declarations) == len(HeadingCase)
+
+
+def test_only_an_animated_theme_moves(readable_theme: SiteTheme):
+    still = replace(readable_theme, style=replace(readable_theme.style, animated=False))
+
+    assert theme_declaration(still) != theme_declaration(readable_theme)
 
 
 def test_every_chip_shape_draws_its_own_outline(readable_theme: SiteTheme):

@@ -1,4 +1,4 @@
-# Citadel: gold on night slate, riveted metal frames, notched chips and carved capitals.
+# Citadel: gold on night slate, gilded gem-set frames, notched chips and a starlit citadel.
 title: Citadel
 light:
   background: "#EFE8DA"
@@ -41,9 +41,14 @@ dark:
   idle: "#ABA390"
   idle_tint: "#262A31"
 style:
-  heading_font: '"Cinzel", "Trajan Pro", "Palatino Linotype", Palatino, Georgia, serif'
-  border_width: 6px
-  frame: metal
+  heading_letter_spacing: 0.06em
+  heading_case: small-capitals
+  body_font: '"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif'
+  heading_font: '"Cinzel", "Trajan Pro", "Luminari", "Copperplate", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif'
+  border_width: 2px
+  frame: gilded
+  backdrop: stars
+  animated: true
   chip_shape: notched
   ornament: "⚜"
   transition_duration: 160ms

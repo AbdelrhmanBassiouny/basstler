@@ -1,0 +1,55 @@
+{% set gold = color(palette.accent) %}
+{% set light = gold.lightened(0.6) %}
+{% set dark = gold.darkened(0.55) %}
+{% set gem = color(palette.bad) %}
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="180" height="180" viewBox="0 0 180 180">
+<defs>
+<radialGradient id="boss" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="{{ light }}"/><stop offset="0.5" stop-color="{{ gold }}"/><stop offset="1" stop-color="{{ dark }}"/></radialGradient>
+<radialGradient id="gem" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="{{ gem.lightened(0.5) }}"/><stop offset="0.45" stop-color="{{ gem.darkened(0.35) }}"/><stop offset="1" stop-color="{{ gem.darkened(0.8) }}"/></radialGradient>
+<path id="scroll" transform="translate(-4.5 1)" d="M33 22 C33 9 42 3 49.3 4.2 L52.2 5.2 L54.4 7.2 L55.5 9.8 L55.6 12.5 L54.6 14.9 L52.8 16.6 L50.6 17.5 L48.4 17.4 L46.5 16.4 L45.2 14.9 L44.6 13.1 L44.8 11.4 L45.7 10 L46.9 9.1 L48.3 8.8 L49.6 9.1 L50.5 9.8 L51 10.7"/>
+<g id="corner" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M31 31 C24 14 13 7 2 2 C7 13 14 24 31 31 Z" fill="url(#boss)" stroke="{{ dark }}" stroke-width="1.5"/>
+<path d="M27 27 L8 8" stroke="{{ dark }}" stroke-width="1"/>
+<path d="M30 24 C24 20 19 12 20 3 C27 8 31 15 34 23 Z" fill="url(#boss)" stroke="{{ dark }}" stroke-width="1.2"/>
+<path d="M24 30 C20 24 12 19 3 20 C8 27 15 31 23 34 Z" fill="url(#boss)" stroke="{{ dark }}" stroke-width="1.2"/>
+<use xlink:href="#scroll" stroke="{{ dark }}" stroke-width="7.5"/>
+<use xlink:href="#scroll" stroke="{{ gold }}" stroke-width="5"/>
+<use xlink:href="#scroll" stroke="{{ light }}" stroke-width="1.5" transform="translate(-0.8 -0.8)"/>
+<g transform="matrix(0 1 1 0 0 0)">
+<use xlink:href="#scroll" stroke="{{ dark }}" stroke-width="7.5"/>
+<use xlink:href="#scroll" stroke="{{ gold }}" stroke-width="5"/>
+<use xlink:href="#scroll" stroke="{{ light }}" stroke-width="1.5" transform="translate(-0.8 -0.8)"/>
+</g>
+<circle cx="30" cy="30" r="17" fill="url(#boss)" stroke="{{ dark }}" stroke-width="2"/>
+<circle cx="30" cy="30" r="12.5" fill="none" stroke="{{ light }}" stroke-width="1" opacity="0.8"/>
+<circle cx="30" cy="30" r="9.5" fill="url(#gem)" stroke="{{ dark }}" stroke-width="1.8"/>
+<ellipse cx="26.8" cy="26.2" rx="3.4" ry="2" fill="#FFFFFF" opacity="0.75" transform="rotate(-35 26.8 26.2)"/>
+</g>
+<g id="edge" fill="none">
+<path d="M60 19 q15 -13 30 0 q15 -13 30 0 v3 h-60 Z" fill="url(#boss)" stroke="{{ dark }}" stroke-width="1.6"/>
+<path d="M64 18 q11 -8 22 0 M94 18 q11 -8 22 0" stroke="{{ light }}" stroke-width="1.2"/>
+<circle cx="60" cy="16" r="2.6" fill="{{ light }}" stroke="{{ dark }}" stroke-width="1"/>
+<circle cx="90" cy="16" r="2.6" fill="{{ light }}" stroke="{{ dark }}" stroke-width="1"/>
+<circle cx="120" cy="16" r="2.6" fill="{{ light }}" stroke="{{ dark }}" stroke-width="1"/>
+<path d="M60 28 q5 -7 10 0 t10 0 t10 0 t10 0 t10 0 t10 0" stroke="{{ dark }}" stroke-width="2.6" transform="translate(0.8 0.8)"/>
+<path d="M60 28 q5 -7 10 0 t10 0 t10 0 t10 0 t10 0 t10 0" stroke="{{ light }}" stroke-width="1.8"/>
+{% for x in range(63, 120, 6) %}
+<circle cx="{{ x }}" cy="37.2" r="2.2" fill="{{ light }}" stroke="{{ dark }}" stroke-width="0.8"/>
+{% endfor %}
+</g>
+</defs>
+<rect x="30" y="30" width="120" height="120" fill="none" stroke="{{ gold }}" stroke-width="24"/>
+<rect x="19" y="19" width="142" height="142" fill="none" stroke="{{ dark }}" stroke-width="2"/>
+<rect x="22" y="22" width="136" height="136" fill="none" stroke="{{ light }}" stroke-width="3"/>
+<rect x="33.6" y="33.6" width="112.8" height="112.8" fill="none" stroke="{{ dark }}" stroke-width="1.4"/>
+<rect x="37.2" y="37.2" width="105.6" height="105.6" fill="none" stroke="{{ gold.darkened(0.3) }}" stroke-width="6"/>
+<rect x="41" y="41" width="98" height="98" fill="none" stroke="{{ dark }}" stroke-width="2"/>
+<use xlink:href="#edge"/>
+<use xlink:href="#edge" transform="rotate(90 90 90)"/>
+<use xlink:href="#edge" transform="rotate(180 90 90)"/>
+<use xlink:href="#edge" transform="rotate(270 90 90)"/>
+<use xlink:href="#corner"/>
+<use xlink:href="#corner" transform="matrix(-1 0 0 1 180 0)"/>
+<use xlink:href="#corner" transform="matrix(1 0 0 -1 0 180)"/>
+<use xlink:href="#corner" transform="matrix(-1 0 0 -1 180 180)"/>
+</svg>

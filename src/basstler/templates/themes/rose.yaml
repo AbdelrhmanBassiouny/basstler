@@ -1,4 +1,4 @@
-# Rosé: cushioned raised panels, rose and plum, serif headings and soft corners.
+# Rosé: rose and plum, serif headings, lace frames set with roses, and falling petals.
 title: Rosé
 light:
   background: "#FBF5F6"
@@ -41,10 +41,14 @@ dark:
   idle: "#B9A9B1"
   idle_tint: "#2E2429"
 style:
-  heading_font: 'Georgia, "Times New Roman", serif'
+  heading_letter_spacing: 0.01em
+  heading_italic: true
+  heading_font: '"Didot", "Bodoni MT", "Baskerville", "Hoefler Text", Georgia, "Times New Roman", serif'
   corner_radius: 16px
   small_corner_radius: 10px
-  frame: raised
+  frame: lace
+  backdrop: petals
+  animated: true
   chip_shape: pill
   ornament: "✿"
   transition_duration: 180ms

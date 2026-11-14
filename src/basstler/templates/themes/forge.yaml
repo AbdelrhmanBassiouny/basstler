@@ -1,4 +1,4 @@
-# Forge: ember on iron, monospace headings, square corners and chiselled, bevelled frames.
+# Forge: ember on iron, monospace headings, wrought-iron frames with flames, and rising sparks.
 title: Forge
 light:
   background: "#F0EDE8"
@@ -41,11 +41,15 @@ dark:
   idle: "#B0A79D"
   idle_tint: "#2A2622"
 style:
+  heading_letter_spacing: 0.08em
+  heading_case: uppercase
   heading_font: 'ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace'
   corner_radius: 2px
   small_corner_radius: 2px
-  border_width: 3px
-  frame: beveled
+  border_width: 2px
+  frame: forged
+  backdrop: embers
+  animated: true
   chip_shape: square
   ornament: "⚒"
   transition_duration: 80ms

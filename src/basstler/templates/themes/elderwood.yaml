@@ -1,4 +1,4 @@
-# Elderwood: forest green and gold on parchment, book-face headings, carved double-ruled panels and a fleuron.
+# Elderwood: forest green and gold on parchment, book-face headings, vine-twined frames and fireflies.
 title: Elderwood
 light:
   background: "#F5EEDC"
@@ -41,12 +41,15 @@ dark:
   idle: "#B6AD94"
   idle_tint: "#2A2B21"
 style:
-  heading_font: '"Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif'
+  heading_letter_spacing: 0.02em
+  heading_font: '"Luminari", "Papyrus", "Hoefler Text", "Book Antiqua", Palatino, Georgia, serif'
   body_font: 'Georgia, "Times New Roman", serif'
   corner_radius: 4px
   small_corner_radius: 3px
-  border_width: 4px
-  frame: carved
+  border_width: 2px
+  frame: vine
+  backdrop: fireflies
+  animated: true
   chip_shape: rounded
   ornament: "❦"
   transition_duration: 220ms

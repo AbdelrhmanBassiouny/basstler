@@ -1,0 +1,19 @@
+{% set spark = color(palette.accent) %}
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+<circle cx="293" cy="291" r="2.5" fill="{{ spark }}" opacity="0.11"/><circle cx="293" cy="291" r="0.7" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.49"/>
+<circle cx="258" cy="229" r="4.8" fill="{{ spark }}" opacity="0.13"/><circle cx="258" cy="229" r="1.3" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.60"/>
+<circle cx="191" cy="191" r="4.5" fill="{{ spark }}" opacity="0.12"/><circle cx="191" cy="191" r="1.2" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.53"/>
+<circle cx="140" cy="129" r="5.0" fill="{{ spark }}" opacity="0.21"/><circle cx="140" cy="129" r="1.3" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.95"/>
+<circle cx="291" cy="173" r="4.0" fill="{{ spark }}" opacity="0.13"/><circle cx="291" cy="173" r="1.0" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.58"/>
+<circle cx="24" cy="22" r="4.0" fill="{{ spark }}" opacity="0.13"/><circle cx="24" cy="22" r="1.1" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.61"/>
+<circle cx="125" cy="274" r="4.3" fill="{{ spark }}" opacity="0.16"/><circle cx="125" cy="274" r="1.1" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.73"/>
+<circle cx="83" cy="21" r="3.5" fill="{{ spark }}" opacity="0.11"/><circle cx="83" cy="21" r="0.9" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.52"/>
+<circle cx="163" cy="306" r="4.8" fill="{{ spark }}" opacity="0.12"/><circle cx="163" cy="306" r="1.3" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.54"/>
+<circle cx="275" cy="247" r="5.1" fill="{{ spark }}" opacity="0.20"/><circle cx="275" cy="247" r="1.3" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.90"/>
+<circle cx="237" cy="245" r="3.6" fill="{{ spark }}" opacity="0.21"/><circle cx="237" cy="245" r="1.0" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.94"/>
+<circle cx="295" cy="61" r="5.1" fill="{{ spark }}" opacity="0.18"/><circle cx="295" cy="61" r="1.4" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.81"/>
+<circle cx="149" cy="169" r="4.1" fill="{{ spark }}" opacity="0.20"/><circle cx="149" cy="169" r="1.1" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.91"/>
+<circle cx="160" cy="257" r="3.6" fill="{{ spark }}" opacity="0.20"/><circle cx="160" cy="257" r="1.0" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.89"/>
+<circle cx="277" cy="149" r="4.4" fill="{{ spark }}" opacity="0.20"/><circle cx="277" cy="149" r="1.2" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.91"/>
+<circle cx="225" cy="156" r="3.1" fill="{{ spark }}" opacity="0.13"/><circle cx="225" cy="156" r="0.8" fill="{{ spark.mixed_with(color('#FFE08A'), 0.6) }}" opacity="0.61"/>
+</svg>

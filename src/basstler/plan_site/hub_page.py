@@ -22,10 +22,13 @@ from basstler.plan_site.plan import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.plan_site.site_page import SitePage
 from basstler.plan_site.theme import (
+    Backdrop,
+    Color,
     AppearanceAttribute,
     ChipShape,
     ColorScheme,
     Frame,
+    HeadingCase,
     SiteAppearance,
     SkippedTheme,
 )
@@ -619,6 +622,9 @@ class SiteStylesheet(TemplatePage):
             scheme=ColorScheme,
             frame=Frame,
             chip_shape=ChipShape,
+            backdrop=Backdrop,
+            heading_case=HeadingCase,
+            color=Color,
         )
 
 

@@ -6,7 +6,7 @@ light:
   surface: "#FFFFFF"
   surface_alternate: "#EAEFF1"
   text: "#16212B"
-  text_muted: "#55636E"
+  text_muted: "#4A5761"
   border: "#D8E0E3"
   accent: "#0E7C86"
   accent_strong: "#075E66"
@@ -43,5 +43,7 @@ dark:
   idle_tint: "#232D34"
 style:
   ornament: "~"
-  frame: metal
+  frame: gilded
+  backdrop: stars
+  animated: true
   chip_shape: notched

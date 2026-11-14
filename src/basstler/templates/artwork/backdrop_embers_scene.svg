@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="460" viewBox="0 0 1600 460">
+<circle cx="1180" cy="96" r="34" fill="{{ palette.scene_ink(0.18) }}"/>
+<circle cx="1215" cy="66" r="44" fill="{{ palette.scene_ink(0.18) }}"/>
+<circle cx="1262" cy="44" r="38" fill="{{ palette.scene_ink(0.18) }}"/>
+<circle cx="1300" cy="20" r="30" fill="{{ palette.scene_ink(0.18) }}"/>
+<circle cx="1150" cy="126" r="22" fill="{{ palette.scene_ink(0.18) }}"/>
+<path d="M900 460 L1090 170 L1118 182 L1150 166 L1180 180 L1210 168 L1420 460 Z" fill="{{ palette.scene_ink(0.3) }}"/>
+<path d="M1118 182 L1150 166 L1180 180 L1168 250 L1150 215 L1140 290 L1128 230 Z" fill="{{ palette.accent }}" opacity="0.75"/>
+<path d="M0 460 L0 292 L50 276 L100 221 L150 290 L200 284 L250 272 L300 332 L350 283 L400 266 L450 241 L500 346 L550 314 L600 346 L650 239 L700 256 L750 354 L800 213 L850 215 L900 262 L950 268 L1000 336 L1050 358 L1100 281 L1150 351 L1200 331 L1250 324 L1300 355 L1350 290 L1400 294 L1450 234 L1500 282 L1550 264 L1600 292 L1600 460 Z" fill="{{ palette.scene_ink(0.5) }}"/>
+<path d="M330 460 V300 C330 240 470 240 470 300 V460 Z M360 262 V180 h30 V250 Z M354 180 h42 v-10 h-42 Z M430 262 V210 h24 V258 Z M425 210 h34 v-9 h-34 Z " fill="{{ palette.scene_ink(0.75) }}"/>
+<path d="M372 460 V350 C372 316 428 316 428 350 V460 Z" fill="{{ palette.accent }}" opacity="0.8"/>
+<rect x="362" y="190" width="26" height="7" fill="{{ palette.accent }}" opacity="0.8"/>
+<path d="M1410 420 L1409 431 L1393 437 L1390 445 L1397 461 L1389 469 L1373 465 L1365 470 L1362 487 L1351 489 L1340 476 L1331 475 L1318 487 L1308 482 L1307 465 L1300 460 L1283 461 L1278 452 L1287 437 L1285 429 L1270 420 L1271 409 L1287 403 L1290 395 L1283 379 L1291 371 L1307 375 L1315 370 L1318 353 L1329 351 L1340 364 L1349 365 L1362 353 L1372 358 L1373 375 L1380 380 L1397 379 L1402 388 L1393 403 L1395 411 Z M1361 420 a21 21 0 1 0 -42 0 a21 21 0 1 0 42 0 Z" fill-rule="evenodd" fill="{{ palette.scene_ink(0.75) }}"/>
+<path d="M1476 372 L1475 380 L1466 384 L1463 390 L1464 400 L1458 405 L1448 402 L1442 403 L1436 412 L1428 411 L1424 402 L1418 399 L1408 400 L1403 394 L1406 384 L1405 378 L1396 372 L1397 364 L1406 360 L1409 354 L1408 344 L1414 339 L1424 342 L1430 341 L1436 332 L1444 333 L1448 342 L1454 345 L1464 344 L1469 350 L1466 360 L1467 366 Z M1448 372 a12 12 0 1 0 -24 0 a12 12 0 1 0 24 0 Z" fill-rule="evenodd" fill="{{ palette.scene_ink(0.75) }}"/>
+<path d="M174 440 L173 449 L161 455 L157 462 L161 475 L155 481 L142 477 L135 481 L129 493 L120 494 L112 483 L105 481 L93 487 L85 481 L87 468 L83 462 L69 458 L67 449 L77 440 L77 432 L69 422 L73 413 L87 412 L92 407 L93 393 L102 389 L112 397 L120 397 L129 387 L138 389 L142 403 L148 407 L161 405 L167 413 L161 425 L163 432 Z M136 440 a16 16 0 1 0 -32 0 a16 16 0 1 0 32 0 Z" fill-rule="evenodd" fill="{{ palette.scene_ink(0.75) }}"/>
+<path d="M0 460 L0 423 L80 428 L160 433 L240 414 L320 414 L400 418 L480 422 L560 432 L640 434 L720 432 L800 438 L880 420 L960 430 L1040 418 L1120 430 L1200 415 L1280 418 L1360 440 L1440 435 L1520 416 L1600 423 L1600 460 Z" fill="{{ palette.scene_ink(1) }}"/>
+<g transform="translate(620 428) scale(1.5 1.5)" fill="{{ palette.scene_ink(1) }}" stroke="{{ palette.scene_ink(1) }}" stroke-width="0" stroke-linecap="round">
+<circle cx="0" cy="-48" r="6.5"/><path d="M-5 -45 L7 -45 L3 -32 Z M-11 -42 H11 L9 -20 H-10 Z M-10 -20 H-1 V0 H-11 Z M1 -20 H9 L11 0 H2 Z"/>
+<path d="M6 -41 L20 -60 L25 -56 L11 -36 Z M19 -62 l11 -13 l3 2.4 l-11 13 Z M24 -82 l14 9 l-6 8 l-14 -9 Z M8 -34 L28 -24 L26 -20 L7 -29 Z"/>
+<path d="M24 -20 H56 L49 -13 H43 V-6 H49 V0 H28 V-6 H34 V-13 H30 C26 -13 24 -17 24 -20 Z"/>
+</g>
+<rect x="658" y="392" width="20" height="5" fill="{{ palette.accent }}"/>
+<circle cx="656" cy="372" r="3.6399999999999997" fill="{{ palette.accent }}" stroke="none" opacity="0.20"/><circle cx="656" cy="372" r="1.4" fill="{{ palette.accent }}" stroke="none" opacity="0.9"/>
+<circle cx="680" cy="364" r="3.6399999999999997" fill="{{ palette.accent }}" stroke="none" opacity="0.20"/><circle cx="680" cy="364" r="1.4" fill="{{ palette.accent }}" stroke="none" opacity="0.9"/>
+<circle cx="692" cy="376" r="3.6399999999999997" fill="{{ palette.accent }}" stroke="none" opacity="0.20"/><circle cx="692" cy="376" r="1.4" fill="{{ palette.accent }}" stroke="none" opacity="0.9"/>
+<circle cx="666" cy="356" r="3.6399999999999997" fill="{{ palette.accent }}" stroke="none" opacity="0.20"/><circle cx="666" cy="356" r="1.4" fill="{{ palette.accent }}" stroke="none" opacity="0.9"/>
+<circle cx="700" cy="360" r="3.6399999999999997" fill="{{ palette.accent }}" stroke="none" opacity="0.20"/><circle cx="700" cy="360" r="1.4" fill="{{ palette.accent }}" stroke="none" opacity="0.9"/>
+<g transform="translate(1010 432) scale(-1.1 1.1)" fill="{{ palette.scene_ink(1) }}" stroke="{{ palette.scene_ink(1) }}" stroke-width="0" stroke-linecap="round">
+<circle cx="0" cy="-48" r="6.5"/><path d="M-5 -45 L7 -45 L3 -32 Z M-11 -42 H11 L9 -20 H-10 Z M-10 -20 H-1 V0 H-11 Z M1 -20 H9 L11 0 H2 Z"/>
+<path d="M6 -41 L20 -60 L25 -56 L11 -36 Z M19 -62 l11 -13 l3 2.4 l-11 13 Z M24 -82 l14 9 l-6 8 l-14 -9 Z M8 -34 L28 -24 L26 -20 L7 -29 Z"/>
+<path d="M24 -20 H56 L49 -13 H43 V-6 H49 V0 H28 V-6 H34 V-13 H30 C26 -13 24 -17 24 -20 Z"/>
+</g>
+</svg>
