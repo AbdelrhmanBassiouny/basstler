@@ -56,3 +56,17 @@ def test_only_code_the_staged_change_touches_is_reported(repository):
     assert [violation.first_line > committed_lines for violation in violations] == [
         True
     ]
+
+
+def test_code_a_staged_move_carries_over_unchanged_is_not_reported(repository):
+    """
+    Moving the module keeps its committed overlong docstring out of the check.
+    """
+    subprocess.run(["git", "mv", "module.py", "moved.py"], cwd=repository, check=True)
+    check = CodeRulesCheck(
+        (ProseLengthChecker(),), StagedLines(GitCommandRunner(repository))
+    )
+
+    violations = check.violations([repository / "moved.py"])
+
+    assert violations == []
