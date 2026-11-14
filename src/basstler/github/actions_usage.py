@@ -283,11 +283,11 @@ def main() -> None:
         return
     summary_path = GitHubActionsVariable.STEP_SUMMARY.read()
     if summary_path:
-        with open(summary_path, "a") as summary:
+        with open(summary_path, "a", encoding="utf-8") as summary:
             summary.write(report.markdown())
     output_path = GitHubActionsVariable.OUTPUT.read()
     if output_path:
-        with open(output_path, "a") as output:
+        with open(output_path, "a", encoding="utf-8") as output:
             output.write(
                 f"{UsageOutputKey.OVER_BUDGET}={str(report.is_over_budget).lower()}\n"
             )

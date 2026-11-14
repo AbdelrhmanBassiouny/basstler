@@ -85,7 +85,7 @@ def page_of(output: Path, plan: SitePlan | None = None) -> str:
     directory = output / str(NOTES_REPOSITORY)
     if plan is not None:
         directory /= plan
-    return (directory / SiteFile.PAGE).read_text()
+    return (directory / SiteFile.PAGE).read_text(encoding="utf-8")
 
 
 # %% the plans the notes branch carries
@@ -99,13 +99,15 @@ def test_every_plan_in_reads_only_directories_that_carry_a_manifest():
 def test_from_directory_reads_the_roadmap():
     source = PlanSource.from_directory(SitePlan.FIRST.directory)
     assert source.roadmap_text == (
-        (SitePlan.FIRST.directory / PlanDocument.ROADMAP).read_text()
+        (SitePlan.FIRST.directory / PlanDocument.ROADMAP).read_text(encoding="utf-8")
     )
 
 
 def test_from_directory_without_a_roadmap_reads_it_as_empty(tmp_path: Path):
     manifest = SitePlan.SECOND.directory / PlanDocument.MANIFEST
-    (tmp_path / PlanDocument.MANIFEST).write_text(manifest.read_text())
+    (tmp_path / PlanDocument.MANIFEST).write_text(
+        manifest.read_text(encoding="utf-8"), encoding="utf-8"
+    )
     assert PlanSource.from_directory(tmp_path).roadmap_text == ""
 
 
@@ -175,7 +177,9 @@ def test_every_plan_page_shows_the_repositorys_rules(
     site: RepositorySite, tmp_path: Path
 ):
     site.build(tmp_path)
-    rules = RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
+    rules = RepositoryRules.from_yaml(
+        DatasetLocation.REPOSITORY_RULES.read_text(encoding="utf-8")
+    )
     for plan in PUBLISHED_PLANS:
         page = page_of(tmp_path, plan)
         assert all(html.escape(rule.text) in page for rule in rules.rules)
@@ -353,7 +357,7 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
 ):
     summary = hub_site.build(tmp_path / "site")
 
-    hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
+    hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text(encoding="utf-8")
     assert link_to(REPOSITORY_URL) in hub_page
     repositories = summary.repositories
     assert [len(repository.plans) for repository in repositories] == [
@@ -384,7 +388,7 @@ def test_the_hub_names_every_plan_and_repository_it_left_out(
     hub_site: HubSite, tmp_path: Path
 ):
     summary = hub_site.build(tmp_path / "site")
-    hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
+    hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text(encoding="utf-8")
     for skipped in summary.skipped_pages:
         assert skipped.site_path in hub_page
 
@@ -394,14 +398,20 @@ def test_the_site_build_writes_the_stylesheet_its_pages_link(
 ):
     output = tmp_path / "site"
     hub_site.build(output)
-    assert (output / SiteFile.STYLESHEET).read_text() == SiteStylesheet().render()
-    assert link_to(hub_site.stylesheet_url) in (output / SiteFile.PAGE).read_text()
+    assert (output / SiteFile.STYLESHEET).read_text(
+        encoding="utf-8"
+    ) == SiteStylesheet().render()
+    assert link_to(hub_site.stylesheet_url) in (output / SiteFile.PAGE).read_text(
+        encoding="utf-8"
+    )
 
 
 def test_the_site_build_writes_its_digest(hub_site: HubSite, tmp_path: Path):
     output = tmp_path / "site"
     hub_site.build(output)
-    assert (output / SiteFile.DIGEST).read_text() == f"{SiteDigest(output).value}\n"
+    assert (output / SiteFile.DIGEST).read_text(
+        encoding="utf-8"
+    ) == f"{SiteDigest(output).value}\n"
 
 
 # %% the site's digest
@@ -419,7 +429,10 @@ def test_the_digest_changes_when_a_page_changes(site: RepositorySite, tmp_path: 
     site.build(tmp_path)
     published = SiteDigest(tmp_path).value
     index = tmp_path / str(NOTES_REPOSITORY) / SiteFile.PAGE
-    index.write_text(f"{index.read_text()}{SiteSampleText.SITE_URL}")
+    index.write_text(
+        f"{index.read_text(encoding='utf-8')}{SiteSampleText.SITE_URL}",
+        encoding="utf-8",
+    )
     assert SiteDigest(tmp_path).value != published
 
 

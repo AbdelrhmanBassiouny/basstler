@@ -63,7 +63,9 @@ def dataset_remotes(tmp_path_factory: pytest.TempPathFactory) -> Path:
         remotes,
         NOTES_REPOSITORY,
         {
-            path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text()
+            path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text(
+                encoding="utf-8"
+            )
             for path in DatasetLocation.SITE_PLANS.value.rglob("*")
             if path.is_file()
         },

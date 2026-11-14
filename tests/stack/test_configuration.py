@@ -56,7 +56,9 @@ def test_the_shipped_defaults_name_no_repository():
     A package installed into anyone's project cannot know which repository that project
     is reviewed on.
     """
-    shipped = tomllib.loads(PackageLocation.STACK_CONFIGURATION.value.read_text())
+    shipped = tomllib.loads(
+        PackageLocation.STACK_CONFIGURATION.value.read_text(encoding="utf-8")
+    )
 
     assert StackSetting.UPSTREAM_REPOSITORY not in shipped
     assert StackSetting.FORK_REPOSITORY not in shipped
@@ -69,8 +71,12 @@ def test_the_projects_settings_outrank_the_shipped_defaults(tmp_path: Path):
             tmp_path, ConfigurationLocation.PROJECT_CONFIGURATION
         ),
     )
-    project = tomllib.loads(ConfigurationLocation.PROJECT_CONFIGURATION.read_text())
-    shipped = tomllib.loads(ConfigurationLocation.SHIPPED_CONFIGURATION.read_text())
+    project = tomllib.loads(
+        ConfigurationLocation.PROJECT_CONFIGURATION.read_text(encoding="utf-8")
+    )
+    shipped = tomllib.loads(
+        ConfigurationLocation.SHIPPED_CONFIGURATION.read_text(encoding="utf-8")
+    )
 
     values = configuration.values()
 
@@ -87,9 +93,9 @@ def test_the_upstream_is_the_one_the_project_names(tmp_path: Path):
     )
 
     assert configuration.upstream_repository() == Repository.parse(
-        tomllib.loads(ConfigurationLocation.PROJECT_CONFIGURATION.read_text())[
-            StackSetting.UPSTREAM_REPOSITORY
-        ]
+        tomllib.loads(
+            ConfigurationLocation.PROJECT_CONFIGURATION.read_text(encoding="utf-8")
+        )[StackSetting.UPSTREAM_REPOSITORY]
     )
 
 
@@ -99,7 +105,7 @@ def test_a_project_without_settings_runs_on_the_shipped_defaults(tmp_path: Path)
     )
 
     assert configuration.values() == tomllib.loads(
-        ConfigurationLocation.SHIPPED_CONFIGURATION.read_text()
+        ConfigurationLocation.SHIPPED_CONFIGURATION.read_text(encoding="utf-8")
     )
 
 

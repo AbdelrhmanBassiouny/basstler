@@ -122,7 +122,9 @@ def published_stack_settings(
     """
     checkout = repository.clone_notes_branch(tmp_path / "published")
     return tomllib.loads(
-        (checkout / ProjectLocation.PERSONAL_STACK_CONFIGURATION).read_text()
+        (checkout / ProjectLocation.PERSONAL_STACK_CONFIGURATION).read_text(
+            encoding="utf-8"
+        )
     )
 
 

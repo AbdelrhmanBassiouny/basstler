@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation
 from basstler.shell_configuration import ShellConfigurationFunction
 
@@ -87,7 +88,7 @@ def hold_install_lock(repository: ScratchRepository, holder: int) -> Path:
     """
     lock = install_lock(repository)
     lock.mkdir(parents=True)
-    (lock / "pid").write_text(f"{holder}\n")
+    (lock / "pid").write_text(f"{holder}\n", encoding="utf-8")
     return lock
 
 
@@ -149,7 +150,7 @@ def test_an_install_that_never_finished_is_completed_before_the_module_runs(
     )
 
     assert result.returncode == 0, result.stderr
-    assert len(call_log.read_text().splitlines()) == 1
+    assert len(call_log.read_text(encoding="utf-8").splitlines()) == 1
     assert not install_lock(entry_point_repository).exists()
 
 
@@ -159,19 +160,18 @@ def test_an_install_still_running_is_waited_for_rather_than_repeated(
     tmp_path: Path,
 ):
     source_file = installed_source_file(entry_point_repository)
-    source = source_file.read_text()
+    source = source_file.read_text(encoding="utf-8")
     source_file.unlink()
     lock = install_lock(entry_point_repository)
     running_install = subprocess.Popen(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             'sleep 1; printf "%s" "$1" > "$2"; rm -rf "$3"',
             "running-install",
             source,
             str(source_file),
             str(lock),
-        ]
+        )
     )
     hold_install_lock(entry_point_repository, running_install.pid)
     call_log = tmp_path / "pip-calls"

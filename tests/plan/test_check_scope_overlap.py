@@ -275,7 +275,7 @@ def test_command_line_prints_the_report_as_json(
             "the parent=overlapping",
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         cwd=RepositoryLocation.ROOT,
     )
     assert result.returncode == 0, result.stderr
@@ -309,7 +309,7 @@ def test_command_line_reports_an_unresolvable_branch_as_a_failure(
             NEW_SKILL_PATH,
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         cwd=RepositoryLocation.ROOT,
     )
 

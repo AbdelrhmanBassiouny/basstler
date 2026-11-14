@@ -286,6 +286,7 @@ PACKAGE_MAP = PackageMap(
                 "class_property",
                 "command_line",
                 "credential_origin",
+                "directory_tree",
                 "email_address",
                 "environment",
                 "exceptions",

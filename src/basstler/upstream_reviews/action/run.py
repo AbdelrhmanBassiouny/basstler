@@ -54,7 +54,7 @@ class ActionRun:
         """
         :return: The upstream read as the pushed request asks.
         """
-        data = json.loads(self.request_file.read_text())
+        data = json.loads(self.request_file.read_text(encoding="utf-8"))
         if ActionRequest.kind_of(data) is ActionRequestKind.OPEN_PULL_REQUESTS:
             request = OpenPullRequestsRequest.from_json(data)
             return OpenPullRequestsAnswer.answering(

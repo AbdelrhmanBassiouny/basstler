@@ -43,9 +43,11 @@ def test_only_code_the_staged_change_touches_is_reported(repository):
     docstring the staged change appends is reported.
     """
     path = repository / "module.py"
-    committed_lines = len(path.read_text().splitlines())
-    with path.open("a") as source:
-        source.write(f"\n{ProseSnippet.OVERLONG_ATTRIBUTE_DOCSTRING.read_text()}")
+    committed_lines = len(path.read_text(encoding="utf-8").splitlines())
+    with path.open("a", encoding="utf-8") as source:
+        source.write(
+            f"\n{ProseSnippet.OVERLONG_ATTRIBUTE_DOCSTRING.read_text(encoding='utf-8')}"
+        )
     subprocess.run(["git", "add", "module.py"], cwd=repository, check=True)
     check = CodeRulesCheck(
         (ProseLengthChecker(),), StagedLines(GitCommandRunner(repository))

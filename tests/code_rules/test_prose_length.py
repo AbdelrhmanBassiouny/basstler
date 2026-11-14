@@ -38,7 +38,9 @@ def test_field_lists_and_literal_blocks_are_not_prose():
     """
     summary_and_literal_block_introduction_lines = 2
 
-    (block,) = SourceProse(ProseSnippet.FIELDS_AND_LITERAL_BLOCKS.read_text()).blocks
+    (block,) = SourceProse(
+        ProseSnippet.FIELDS_AND_LITERAL_BLOCKS.read_text(encoding="utf-8")
+    ).blocks
 
     assert block.prose_lines == summary_and_literal_block_introduction_lines
 

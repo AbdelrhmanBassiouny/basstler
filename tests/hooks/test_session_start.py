@@ -24,6 +24,8 @@ from pathlib import Path
 
 import pytest
 
+from basstler.directory_tree import DirectoryTree
+from basstler.bash import Bash
 from basstler.document_references import CitedNames, ShippedModules
 from basstler.github.release_version import ReleaseVersion
 from basstler.locations import (
@@ -163,11 +165,11 @@ class PackageManager(StrEnum):
     """
 
 
-PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text(encoding="utf-8")
 
 PLAN_MANIFEST_WITH_TRACKING_ISSUE = (
     DatasetLocation.DIRECTORY / "plan-with-tracking-issue.yaml"
-).read_text()
+).read_text(encoding="utf-8")
 
 TRACKING_ISSUE = "55"
 
@@ -282,9 +284,9 @@ def test_runs_in_a_project_with_no_claude_code_directory(
     session_start_repository.publish_notes_branch(
         {ProjectLocation.PERSONAL_NOTES_DOCUMENT: "personal notes\n"}
     )
-    shutil.rmtree(
+    DirectoryTree(
         session_start_repository.project_root / ProjectLocation.CLAUDE_CODE_DIRECTORY
-    )
+    ).remove()
 
     result = run_session_start(session_start_repository)
 
@@ -308,11 +310,10 @@ def test_every_session_loads_the_session_rules(
     assert result.returncode == 0, result.stderr
     claude_local = (
         session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
-    ).read_text()
-    assert (
-        ClaudeLocalSection.SESSION_RULES.within(claude_local)
-        == (RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name).read_text()
-    )
+    ).read_text(encoding="utf-8")
+    assert ClaudeLocalSection.SESSION_RULES.within(claude_local) == (
+        RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name
+    ).read_text(encoding="utf-8")
 
 
 def test_a_session_with_no_personal_notes_still_loads_the_session_rules(
@@ -328,11 +329,10 @@ def test_a_session_with_no_personal_notes_still_loads_the_session_rules(
     assert result.returncode == 0, result.stderr
     claude_local = (
         session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
-    ).read_text()
-    assert (
-        ClaudeLocalSection.SESSION_RULES.within(claude_local)
-        == (RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name).read_text()
-    )
+    ).read_text(encoding="utf-8")
+    assert ClaudeLocalSection.SESSION_RULES.within(claude_local) == (
+        RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name
+    ).read_text(encoding="utf-8")
 
 
 # %% the names the personal notes cite
@@ -356,7 +356,7 @@ def test_every_name_the_notes_cite_that_is_no_longer_shipped_is_listed(
     Notes outlive the release they were written against, so a session is told up front
     which of their commands would fail, and what replaced each.
     """
-    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text()
+    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text(encoding="utf-8")
     stale = CitedNames.in_text(notes).stale(ShippedModules.installed())
 
     result = publish_and_run(
@@ -585,9 +585,13 @@ def publish_tracked_plan_and_run(
             PersonalNotesPath.BRANCH_INDEX: branch_index(
                 {ScratchBranch.WORK: manifest.identifier}
             ),
-            plan_directory / PlanDocument.MANIFEST: manifest_path.read_text(),
+            plan_directory / PlanDocument.MANIFEST: manifest_path.read_text(
+                encoding="utf-8"
+            ),
             plan_directory
-            / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
+            / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(
+                encoding="utf-8"
+            ),
         },
         environment,
     )
@@ -604,7 +608,9 @@ def run_on_tracked_branch(
     """
     result = publish_tracked_plan_and_run(repository, manifest, scratch_directory)
     assert result.returncode == 0, result.stderr
-    return (repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS).read_text()
+    return (repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS).read_text(
+        encoding="utf-8"
+    )
 
 
 def published_manifest(repository: ScratchRepository, plan_identifier: str) -> Path:
@@ -639,7 +645,10 @@ def test_a_tracked_branch_loads_the_plan_s_standing_rules(
     claude_local = run_on_tracked_branch(
         session_start_repository, tracked_plan.manifest, tmp_path
     )
-    assert DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text() in claude_local
+    assert (
+        DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(encoding="utf-8")
+        in claude_local
+    )
 
 
 # %% branches no plan item can ever track
@@ -718,9 +727,13 @@ def test_a_merged_item_of_a_plan_no_branch_here_tracks_is_recorded_done_and_drop
     result = publish_and_run(
         session_start_repository,
         {
-            plan_directory / PlanDocument.MANIFEST: manifest_path.read_text(),
+            plan_directory / PlanDocument.MANIFEST: manifest_path.read_text(
+                encoding="utf-8"
+            ),
             plan_directory
-            / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
+            / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(
+                encoding="utf-8"
+            ),
         },
         {
             PullRequestStubVariable.RECORDING: str(
@@ -1002,6 +1015,7 @@ def require_the_uninstallable(repository: ScratchRepository) -> None:
             name=ProjectDeclaration.of_this_package().name,
             dependencies=(UNINSTALLABLE_REQUIREMENT,),
         ).as_toml(),
+        encoding="utf-8",
     )
 
 
@@ -1109,7 +1123,7 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
         UNINSTALLABLE_REQUIREMENT,
         environment_directory(session_start_repository),
     )
-    assert call_log.read_text().splitlines() == [
+    assert call_log.read_text(encoding="utf-8").splitlines() == [
         pip_installer_call(session_start_repository)
     ]
 
@@ -1144,7 +1158,7 @@ def test_marks_the_install_in_progress_only_while_it_runs(
     )
 
     assert result.returncode == 0, result.stderr
-    assert marker_during_install.read_text().strip().isdigit()
+    assert marker_during_install.read_text(encoding="utf-8").strip().isdigit()
     assert not marker.exists()
 
 
@@ -1178,7 +1192,7 @@ def test_installs_the_package_with_uv_where_there_is_one(
         UNINSTALLABLE_REQUIREMENT,
         environment_directory(session_start_repository),
     )
-    assert install_log.read_text().splitlines() == [
+    assert install_log.read_text(encoding="utf-8").splitlines() == [
         uv_installer_call(session_start_repository)
     ]
     assert not pip_log.exists()
@@ -1233,7 +1247,9 @@ def test_reports_that_it_could_not_check_when_the_declaration_will_not_parse(
     with nothing missing - which is what an empty answer means, and would install
     nothing while saying everything was already there.
     """
-    declaration_file(session_start_repository).write_text("this is not toml\n")
+    declaration_file(session_start_repository).write_text(
+        "this is not toml\n", encoding="utf-8"
+    )
 
     result = publish_and_run(session_start_repository)
 
@@ -1284,7 +1300,7 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
         session_start_repository.configuration_value(
             ConfigurationVariable.INSTALLED_SOURCE_FILE
         )
-    ).write_text("an earlier release\n")
+    ).write_text("an earlier release\n", encoding="utf-8")
     stub_bin.install(PackageManager.PIP)
     call_log = tmp_path / "pip-calls"
 
@@ -1304,7 +1320,7 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
         package_source(session_start_repository),
         environment_directory(session_start_repository),
     )
-    assert call_log.read_text().splitlines() == [
+    assert call_log.read_text(encoding="utf-8").splitlines() == [
         pip_installer_call(session_start_repository)
     ]
 
@@ -1552,7 +1568,7 @@ def test_a_hook_of_an_older_release_reinstalls_the_package_at_that_release(
     )
 
     manifest = PluginManifest.of_this_plugin()
-    assert call_log.read_text().splitlines() == [
+    assert call_log.read_text(encoding="utf-8").splitlines() == [
         f"--python {environment_interpreter(session_start_repository)} install "
         f"{manifest.name} @ git+{tagged_release_repository}@{SampleReleaseTag.OLDER}"
     ]
@@ -1674,14 +1690,13 @@ def test_tells_the_session_where_the_plugin_is(
     )
 
     exported = subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             f'source "$0" && printf "%s" "${{{BasstlerVariable.PLUGIN_ROOT}}}"',
             environment_file,
-        ],
+        ),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     assert Path(exported) == session_start_repository.plugin_root
@@ -1702,14 +1717,13 @@ def test_tells_the_session_which_interpreter_runs_the_package(
     )
 
     exported = subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             f'source "$0" && printf "%s" "${{{BasstlerVariable.PYTHON}}}"',
             environment_file,
-        ],
+        ),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     assert exported == session_start_repository.configuration_value(
@@ -1727,7 +1741,7 @@ def without_an_environment(repository: ScratchRepository) -> ScratchRepository:
     :param repository: The fixture-built scratch repository.
     :return: The same repository.
     """
-    shutil.rmtree(environment_directory(repository))
+    DirectoryTree(Path(environment_directory(repository))).remove()
     return repository
 
 
@@ -1762,7 +1776,7 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
         environment_directory(session_start_repository),
         package_source(session_start_repository),
     )
-    assert environment_log.read_text().splitlines() == [
+    assert environment_log.read_text(encoding="utf-8").splitlines() == [
         environment_call(session_start_repository),
         uv_installer_call(session_start_repository),
     ]
@@ -1803,7 +1817,7 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
             "import sys; print(sys.version_info >= (3, 12))",
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     )
     assert version.stdout.strip() == str(True)
@@ -1865,11 +1879,11 @@ def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
         environment_directory(session_start_repository),
         package_source(session_start_repository),
     )
-    assert install_log.read_text().splitlines() == [
+    assert install_log.read_text(encoding="utf-8").splitlines() == [
         f"install --target {installed_uv_directory(session_start_repository)} "
         f"{PackageManager.UV}"
     ]
-    assert environment_log.read_text().splitlines() == [
+    assert environment_log.read_text(encoding="utf-8").splitlines() == [
         environment_call(session_start_repository),
         uv_installer_call(session_start_repository),
     ]
@@ -1912,7 +1926,7 @@ def test_reuses_the_uv_it_installed_before(
         environment_directory(session_start_repository),
         package_source(session_start_repository),
     )
-    assert uv_log.read_text().splitlines() == [
+    assert uv_log.read_text(encoding="utf-8").splitlines() == [
         environment_call(session_start_repository),
         uv_installer_call(session_start_repository),
     ]
@@ -1983,7 +1997,7 @@ def test_installs_into_the_interpreter_a_windows_environment_was_created_with(
         Path(environment_directory(session_start_repository))
         / EnvironmentInterpreterLayout.WINDOWS
     )
-    assert environment_log.read_text().splitlines()[-1] == (
+    assert environment_log.read_text(encoding="utf-8").splitlines()[-1] == (
         f"{PackageManager.PIP} install --python {windows_interpreter} --editable "
         f"{package_source(session_start_repository)}"
     )
@@ -2342,15 +2356,14 @@ def test_tells_the_session_which_environment_runs_the_package(
     )
 
     exported = subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             'source "$0" && printf "%s" "${!1}"',
             environment_file,
             BasstlerVariable.ENVIRONMENT_DIRECTORY,
-        ],
+        ),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     assert exported == environment_directory(session_start_repository)
@@ -2361,7 +2374,7 @@ def test_removes_the_environment_of_a_project_that_is_gone(
 ):
     project = other_project(session_start_repository)
     abandoned = environment_of(session_start_repository, project)
-    shutil.rmtree(project)
+    DirectoryTree(project).remove()
 
     result = publish_and_run(session_start_repository)
 
@@ -2400,8 +2413,8 @@ def test_keeps_the_environment_a_live_install_holds(
         )
     )
     marker.parent.mkdir(parents=True)
-    marker.write_text(f"{os.getpid()}\n")
-    shutil.rmtree(project)
+    marker.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    DirectoryTree(project).remove()
 
     result = publish_and_run(session_start_repository)
 
@@ -2417,7 +2430,7 @@ def test_never_removes_the_environment_the_session_runs(
     """
     project = other_project(session_start_repository)
     running = environment_of(session_start_repository, project)
-    shutil.rmtree(project)
+    DirectoryTree(project).remove()
 
     result = publish_and_run(
         session_start_repository,

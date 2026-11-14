@@ -337,4 +337,4 @@ class Workflow:
         :param path: A workflow file.
         :return: The parsed workflow.
         """
-        return cls.from_json(yaml.safe_load(path.read_text()))
+        return cls.from_json(yaml.safe_load(path.read_text(encoding="utf-8")))

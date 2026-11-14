@@ -27,23 +27,27 @@ from .plan_page_builders import (
 
 
 def _render_example_plan() -> RenderedPlanPage:
-    plan_mapping = yaml.safe_load((EXAMPLE_DIRECTORY / "plan.yaml").read_text())
+    plan_mapping = yaml.safe_load(
+        (EXAMPLE_DIRECTORY / "plan.yaml").read_text(encoding="utf-8")
+    )
     PlanValidator(plan_mapping).validate()
     plan = Plan.from_mapping(plan_mapping)
     pull_requests_by_repository = PullRequestRecord.parse_by_repository(
-        json.loads((EXAMPLE_DIRECTORY / "pr_data.json").read_text())
+        json.loads((EXAMPLE_DIRECTORY / "pr_data.json").read_text(encoding="utf-8"))
     )
     renderer = PlanPage(
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
-        roadmap_text=(EXAMPLE_DIRECTORY / "roadmap.md").read_text(),
+        roadmap_text=(EXAMPLE_DIRECTORY / "roadmap.md").read_text(encoding="utf-8"),
         live_pull_requests=LivePullRequests(pull_requests_by_repository),
     )
     return renderer.render()
 
 
 def test_example_plan_passes_the_same_validation_plan_create_must_satisfy():
-    plan_mapping = yaml.safe_load((EXAMPLE_DIRECTORY / "plan.yaml").read_text())
+    plan_mapping = yaml.safe_load(
+        (EXAMPLE_DIRECTORY / "plan.yaml").read_text(encoding="utf-8")
+    )
     PlanValidator(plan_mapping).validate()  # raises PlanValidationError on any problem
 
 

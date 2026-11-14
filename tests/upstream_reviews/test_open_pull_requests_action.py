@@ -110,7 +110,7 @@ def test_the_run_commits_its_answer_onto_the_request_s_branch(
     read = ActionRead(fork.branch, a_request(), answer_type=OpenPullRequestsAnswer)
     read.send()
     request_file = tmp_path / ActionFile.REQUEST
-    request_file.write_text(json.dumps(a_request().as_sent()))
+    request_file.write_text(json.dumps(a_request().as_sent()), encoding="utf-8")
 
     status = main(
         [
@@ -141,7 +141,7 @@ def test_the_run_deletes_abandoned_requests_after_answering(
     read = ActionRead(fork.branch, a_request(), answer_type=OpenPullRequestsAnswer)
     read.send()
     request_file = tmp_path / ActionFile.REQUEST
-    request_file.write_text(json.dumps(a_request().as_sent()))
+    request_file.write_text(json.dumps(a_request().as_sent()), encoding="utf-8")
 
     main(
         [

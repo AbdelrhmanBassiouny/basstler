@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 import yaml
 
+from basstler.bash import Bash
 from basstler.environment import GitHubCredentialVariable
 from basstler.git.commands import (
     GitCommandFailed,
@@ -269,7 +270,7 @@ class Publishing:
     def git(directory: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
         """:return: The finished git command, run in *directory*."""
         return subprocess.run(
-            ["git", *arguments], cwd=directory, capture_output=True, text=True
+            ["git", *arguments], cwd=directory, capture_output=True, encoding="utf-8"
         )
 
     def file(self, repository: Repository, branch: str, path: str) -> str | None:
@@ -322,22 +323,27 @@ class Publishing:
             {
                 **{
                     Repository(path.parent.name, path.stem).api_path: json.loads(
-                        DatasetLocation.REPOSITORY_NOT_FORK.read_text()
+                        DatasetLocation.REPOSITORY_NOT_FORK.read_text(encoding="utf-8")
                     )
                     for path in self.root.glob("*/*.git")
                 },
                 RunListing.path(self.site.repository, site_branch): json.loads(
-                    site_listing.read_text()
+                    site_listing.read_text(encoding="utf-8")
                 ),
                 RunListing.path(self.notes_repository, NOTES_BRANCH): json.loads(
-                    notes_listing.read_text()
+                    notes_listing.read_text(encoding="utf-8")
                 ),
-                self.notes_repository.api_path: json.loads(notes_details.read_text()),
+                self.notes_repository.api_path: json.loads(
+                    notes_details.read_text(encoding="utf-8")
+                ),
                 proposal.open_pull_requests_path: [
-                    json.loads(listed.read_text()) for listed in open_pull_requests
+                    json.loads(listed.read_text(encoding="utf-8"))
+                    for listed in open_pull_requests
                 ],
             },
-            opened=json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text()),
+            opened=json.loads(
+                DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text(encoding="utf-8")
+            ),
             refusals=site_refusals,
         )
 
@@ -554,7 +560,7 @@ class SiteReadCase(Enum):
         lambda path: refusal_of(
             path,
             HTTPStatus.FORBIDDEN,
-            DatasetLocation.SESSION_PROXY_REFUSAL.read_text(),
+            DatasetLocation.SESSION_PROXY_REFUSAL.read_text(encoding="utf-8"),
         ),
         lambda read: RepositoryAttachmentFix(read.access),
     )
@@ -655,7 +661,9 @@ def test_a_site_repository_git_cannot_reach_is_not_left_to_the_user_to_create(
     runs = publishing.runs_none()
     path = publishing.site.repository.api_path
     del runs.refusals[path]
-    runs.responses[path] = json.loads(DatasetLocation.REPOSITORY_NOT_FORK.read_text())
+    runs.responses[path] = json.loads(
+        DatasetLocation.REPOSITORY_NOT_FORK.read_text(encoding="utf-8")
+    )
 
     with pytest.raises(GitCommandFailed):
         publishing.publication(runs).publish()
@@ -917,10 +925,10 @@ def test_a_dispatch_without_the_stored_token_fails_with_an_error_saying_how_to_s
     step = dispatch_step_of(workflow)
 
     finished = subprocess.run(
-        ["bash", "-c", step.command],
+        Bash.locate(os.environ).command("-c", step.command),
         env={GitHubCredentialVariable.GH_TOKEN: ""},
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
 
     assert finished.returncode == 1
@@ -1029,7 +1037,7 @@ def test_the_merge_workflow_runs_on_every_pull_request_state_change(tmp_path):
     the token too.
     """
     path = tmp_path / MergeWorkflow.location.name
-    path.write_text(MergeWorkflow(a_dispatch_workflow()).text)
+    path.write_text(MergeWorkflow(a_dispatch_workflow()).text, encoding="utf-8")
 
     trigger = Workflow.at(path).trigger(TriggerEvent.PULL_REQUEST_TARGET)
 
@@ -1074,7 +1082,7 @@ def test_a_build_starting_workflow_keeps_to_the_actions_budget(
     workflow: PlanSiteWorkflow, tmp_path
 ):
     path = tmp_path / workflow.location.name
-    path.write_text(workflow.text)
+    path.write_text(workflow.text, encoding="utf-8")
 
     assert ActionsBudget().violations_of(Workflow.at(path)) == ()
 
@@ -1108,7 +1116,7 @@ def private_runs(
     secret_path = PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository)
     if secret_refusal is None:
         client.responses[secret_path] = json.loads(
-            DatasetLocation.PLAN_SITE_READ_TOKEN_STORED.read_text()
+            DatasetLocation.PLAN_SITE_READ_TOKEN_STORED.read_text(encoding="utf-8")
         )
     else:
         client.refusals[secret_path] = secret_refusal
@@ -1241,7 +1249,7 @@ def test_a_private_repository_a_plan_names_without_a_read_token_writes_nothing(
     plan_naming(private_publishing, WORK_REPOSITORY)
     runs = private_publishing.runs_none()
     runs.responses[WORK_REPOSITORY.api_path] = json.loads(
-        DatasetLocation.REPOSITORY_PRIVATE.read_text()
+        DatasetLocation.REPOSITORY_PRIVATE.read_text(encoding="utf-8")
     )
     runs.refusals[
         PlanSiteSecret.READ_TOKEN.path_on(private_publishing.site.repository)
@@ -1277,7 +1285,7 @@ def registering_beside_private_work(
     second_publishing = Publishing(second, published.root)
     runs = second_publishing.runs_none()
     runs.responses[WORK_REPOSITORY.api_path] = json.loads(
-        DatasetLocation.REPOSITORY_PRIVATE.read_text()
+        DatasetLocation.REPOSITORY_PRIVATE.read_text(encoding="utf-8")
     )
     runs.refusals[
         PlanSiteSecret.READ_TOKEN.path_on(second_publishing.site.repository)
@@ -1532,7 +1540,9 @@ def test_an_open_pull_request_for_the_workflow_is_not_opened_again(protected):
 def test_merging_the_workflow_merges_its_pull_request(protected):
     report = protected.publication(protected.runs_none()).publish()
     pull_request = RestPullRequestSummary.from_json(
-        json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text())
+        json.loads(
+            DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text(encoding="utf-8")
+        )
     )
 
     assert pending_step(report, UserStep.ADD_MERGE_WORKFLOW) == (
@@ -1549,7 +1559,7 @@ def pull_request_failures(
     return [
         GitHubRequestFailed(
             status=HTTPStatus.FORBIDDEN,
-            detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
+            detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(encoding="utf-8"),
             method=HttpMethod.POST,
             path=path,
             credential_origin=CredentialProvider.CALLER,
@@ -1853,8 +1863,8 @@ def run_cloud_store_command(
     monkeypatch.setenv(
         RecordingGitHubVariable.WORKFLOW_RUN_STATUS, str(workflow_run_status)
     )
-    subprocess.run(["sh", "-c", command], input=f"{TYPED_TOKEN}\n", text=True)
-    return calls.read_text().splitlines()
+    subprocess.run(["sh", "-c", command], input=f"{TYPED_TOKEN}\n", encoding="utf-8")
+    return calls.read_text(encoding="utf-8").splitlines()
 
 
 def test_a_cloud_session_s_store_command_runs_without_this_session_s_python(published):
@@ -2028,7 +2038,7 @@ def refused_push(error_output: DatasetLocation) -> PublicationPushRefusedError:
             arguments=("push",),
             exit_status=1,
             output="",
-            error_output=error_output.read_text().strip(),
+            error_output=error_output.read_text(encoding="utf-8").strip(),
         ),
         notes_remote=RemoteName.ORIGIN,
         notes_repository=REFUSED_NOTES_REPOSITORY,

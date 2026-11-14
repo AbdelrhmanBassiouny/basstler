@@ -23,14 +23,14 @@ from ..constants.paths import PersonalNotesPath, RepositoryLocation, SkillDirect
 
 STARTER_NOTES = (
     RepositoryLocation.PLUGIN / "skills" / "setup-personal-notes" / "starter-notes.md"
-).read_text()
+).read_text(encoding="utf-8")
 """
 The starter notes as shipped.
 """
 
 PULL_REQUEST_RULES = (
     RepositoryLocation.PLUGIN / SkillDirectory.PULL_REQUEST_RULES_DOCUMENT
-).read_text()
+).read_text(encoding="utf-8")
 """
 The pull-request rules as shipped, which hold only while a skill linking them runs.
 """
@@ -92,7 +92,9 @@ def test_the_starter_notes_do_not_name_the_package_or_its_local_file(name: str):
 def test_the_session_rules_carry_the_instruction_that_names_each_script(
     script: PluginLocation,
 ):
-    rules = (RepositoryLocation.PLUGIN / PluginLocation.SESSION_RULES).read_text()
+    rules = (RepositoryLocation.PLUGIN / PluginLocation.SESSION_RULES).read_text(
+        encoding="utf-8"
+    )
 
     assert script.name in rules
 

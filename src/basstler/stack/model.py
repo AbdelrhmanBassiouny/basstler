@@ -130,7 +130,7 @@ class PullRequest:
         """
         if not path.exists():
             raise BoardUnavailable(path)
-        board = json.loads(path.read_text())
+        board = json.loads(path.read_text(encoding="utf-8"))
         return [cls.from_board_entry(entry) for entry in board[BoardKey.PULL_REQUESTS]]
 
     @classmethod

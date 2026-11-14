@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation
 
 from .constants.paths import RepositoryLocation
@@ -84,7 +85,7 @@ class ScriptRunner(ABC):
             [*self.command, *arguments],
             cwd=self.project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             env=self.environment(environment_overrides),
         )
 
@@ -126,7 +127,7 @@ class BashScriptRunner(ScriptRunner):
     @property
     def command(self) -> tuple[str, ...]:
         """:return: bash, running that script."""
-        return ("bash", str(self.script_path))
+        return tuple(Bash.locate(os.environ).command(str(self.script_path)))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -143,7 +144,7 @@ class BashCommandRunner(ScriptRunner):
     @property
     def command(self) -> tuple[str, ...]:
         """:return: bash, exiting at the script's first failing command."""
-        return ("bash", "-e", "-c", self.script)
+        return tuple(Bash.locate(os.environ).command("-e", "-c", self.script))
 
 
 def configuration_value(variable_name: str) -> str:
@@ -153,16 +154,15 @@ def configuration_value(variable_name: str) -> str:
         from the repository root.
     """
     return subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             'source "$0" && printf "%s" "${!1}"',
             RepositoryLocation.HOOKS
             / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
             variable_name,
-        ],
+        ),
         cwd=RepositoryLocation.ROOT.value,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     ).stdout

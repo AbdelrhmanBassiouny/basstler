@@ -23,6 +23,8 @@ from pathlib import Path
 from types import ModuleType
 
 import basstler
+from basstler.directory_tree import DirectoryTree
+from basstler.bash import Bash
 from basstler.git.commands import GitCommandRunner
 from basstler.github.repository import Repository
 from basstler.locations import PackageLocation, PluginLocation
@@ -105,7 +107,9 @@ def write_interpreter_wrapper(destination: Path) -> Path:
     :return: *destination*.
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    destination.write_text(
+        f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8"
+    )
     destination.chmod(FileMode.EXECUTABLE)
     return destination
 
@@ -181,7 +185,7 @@ def read_git_config_value(path: Path, key: str) -> str:
     result = subprocess.run(
         ["git", "config", "--file", str(path), "--get", key],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
@@ -346,7 +350,7 @@ class ScratchRepository:
             ["git", *arguments],
             cwd=cwd or self.project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         )
 
     def install_hook_scripts(self, *script_names: str) -> None:
@@ -375,7 +379,7 @@ class ScratchRepository:
             / PackageLocation.STACK_CONFIGURATION.value.name
         )
         written.parent.mkdir(parents=True, exist_ok=True)
-        written.write_text(content)
+        written.write_text(content, encoding="utf-8")
         return written
 
     def install_package(self) -> None:
@@ -422,10 +426,10 @@ class ScratchRepository:
             / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
         )
         return subprocess.run(
-            ["bash", "-c", f'source "{script}" && {command}'],
+            Bash.locate(os.environ).command("-c", f'source "{script}" && {command}'),
             cwd=self.project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
             env=self.runner_environment(**overrides),
         ).stdout
@@ -452,12 +456,14 @@ class ScratchRepository:
         ).write_text(
             self.configuration_output(
                 ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE, **overrides
-            )
+            ),
+            encoding="utf-8",
         )
         Path(
             self.configuration_value(ConfigurationVariable.INSTALLED_PLUGIN_DIGEST_FILE)
         ).write_text(
-            self.configuration_output(ShellConfigurationFunction.PLUGIN_CONTENT_DIGEST)
+            self.configuration_output(ShellConfigurationFunction.PLUGIN_CONTENT_DIGEST),
+            encoding="utf-8",
         )
         return interpreter
 
@@ -490,7 +496,7 @@ class ScratchRepository:
         }
         manifest_path = self.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(json.dumps(manifest, indent=2))
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     def runner_environment(self, **overrides: str) -> dict[str, str]:
         """
@@ -558,7 +564,7 @@ class ScratchRepository:
         """
         destination = self.project_root / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(content)
+        destination.write_text(content, encoding="utf-8")
         return destination
 
     def commit_everything(self, message: str) -> None:
@@ -637,7 +643,7 @@ class ScratchRepository:
         :param content: The content to commit there.
         """
         checkout = self.project_root.parent / "notes-update-checkout"
-        shutil.rmtree(checkout, ignore_errors=True)
+        DirectoryTree(checkout).remove()
         self.clone_notes_branch(checkout)
         self.run_git("config", "user.name", SCRATCH_IDENTITY.name, cwd=checkout)
         self.run_git("config", "user.email", SCRATCH_IDENTITY.email, cwd=checkout)
@@ -645,13 +651,13 @@ class ScratchRepository:
 
         destination = checkout / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(content)
+        destination.write_text(content, encoding="utf-8")
         self.run_git("add", relative_path, cwd=checkout)
         self.run_git("commit", "--quiet", "-m", f"Set {relative_path}", cwd=checkout)
         self.run_git(
             "push", "--quiet", "origin", ScratchBranch.PERSONAL_NOTES, cwd=checkout
         )
-        shutil.rmtree(checkout)
+        DirectoryTree(checkout).remove()
 
     def serve_origin_as(self, repository: Repository) -> None:
         """

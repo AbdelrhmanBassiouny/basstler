@@ -159,7 +159,7 @@ class PlanManifest:
         """
         :return: The manifest, parsed.
         """
-        with self.path.open() as manifest_file:
+        with self.path.open(encoding="utf-8") as manifest_file:
             return yaml.safe_load(manifest_file)
 
     @property
@@ -411,7 +411,7 @@ class ManifestToolsCommandLine:
             index = BranchIndex(
                 arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
             )
-            arguments.output.write_text(index.render())
+            arguments.output.write_text(index.render(), encoding="utf-8")
         elif arguments.subcommand == ManifestToolsCommand.ITEM:
             manifest = model.PlanManifest.from_file(arguments.manifest_path)
             item = (

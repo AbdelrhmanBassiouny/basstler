@@ -413,7 +413,7 @@ class PersonalNotesSetup:
             cwd=self.project_root,
             env=environment,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         )
 
     def run_hook_script(self, script: PluginLocation, *arguments: str) -> None:

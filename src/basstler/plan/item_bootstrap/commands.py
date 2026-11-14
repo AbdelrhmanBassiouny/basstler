@@ -129,12 +129,12 @@ class OpenCommand(BootstrapCommand):
                 session_url=arguments.session,
                 pull_request_title=arguments.pull_request_title,
                 pull_request_body=(
-                    arguments.pull_request_body.read_text()
+                    arguments.pull_request_body.read_text(encoding="utf-8")
                     if arguments.pull_request_body
                     else None
                 ),
                 pull_request_number=arguments.pull_request_number,
-            )
+            ),
         )
 
 
@@ -183,17 +183,22 @@ class UpdateCommand(BootstrapCommand):
             if value is not None
         }
         if arguments.notes:
-            values_by_key[ManifestKey.NOTES] = arguments.notes.read_text()
+            values_by_key[ManifestKey.NOTES] = arguments.notes.read_text(
+                encoding="utf-8"
+            )
         if arguments.blockers:
             values_by_key[ManifestKey.BLOCKERS] = [
-                blocker.read_text().strip() for blocker in arguments.blockers
+                blocker.read_text(encoding="utf-8").strip()
+                for blocker in arguments.blockers
             ]
         return ItemUpdateRequest(
             plan_identifier=arguments.plan,
             item_identifier=arguments.item,
             values_by_key=values_by_key,
             notes_to_append=(
-                arguments.append_notes.read_text() if arguments.append_notes else None
+                arguments.append_notes.read_text(encoding="utf-8")
+                if arguments.append_notes
+                else None
             ),
         ).update(project_root)
 
@@ -262,7 +267,7 @@ class BlockCommand(BootstrapCommand):
         return OwnedBlocker(
             branch=arguments.branch,
             owner=arguments.owner,
-            reason=arguments.reason.read_text().strip(),
+            reason=arguments.reason.read_text(encoding="utf-8").strip(),
         ).write(project_root)
 
 

@@ -72,7 +72,7 @@ def details_of(repository: Repository) -> dict[str, Any]:
     """
     return {
         f"/{repository.api_path}": json.loads(
-            DatasetLocation.REPOSITORY_NOT_FORK.read_text()
+            DatasetLocation.REPOSITORY_NOT_FORK.read_text(encoding="utf-8")
         )
     }
 

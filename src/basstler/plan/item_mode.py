@@ -271,7 +271,7 @@ class SettingsFile:
         :return: The parsed settings.
         """
         try:
-            return tomllib.loads(self.path.read_text())
+            return tomllib.loads(self.path.read_text(encoding="utf-8"))
         except tomllib.TOMLDecodeError as error:
             raise MalformedModeSettingsError(file=self, detail=str(error)) from None
 
@@ -422,13 +422,13 @@ def personal_settings(project_root: Path) -> dict[str, Any]:
         ],
         cwd=project_root,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     if shown.returncode != 0:
         return {}
     with tempfile.TemporaryDirectory() as scratch_directory:
         scratch_file = Path(scratch_directory) / "personal-plan-item-modes.toml"
-        scratch_file.write_text(shown.stdout)
+        scratch_file.write_text(shown.stdout, encoding="utf-8")
         return SettingsFile(
             path=scratch_file, origin=ProjectLocation.PERSONAL_PLAN_ITEM_MODES
         ).read()
@@ -727,7 +727,7 @@ def write_mode(
     pinned = ", ".join(skill.setting_key for skill in requested)
     with tempfile.TemporaryDirectory() as scratch_directory:
         scratch_file = Path(scratch_directory) / "plan-item-modes.toml"
-        scratch_file.write_text(render_settings(modes))
+        scratch_file.write_text(render_settings(modes), encoding="utf-8")
         written = subprocess.run(
             Bash.locate(os.environ).command(
                 PluginRoot.locate(os.environ).path_of(
@@ -742,7 +742,7 @@ def write_mode(
             ),
             cwd=project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         )
     if written.returncode != 0:
         raise SettingsWriteRefusedError(

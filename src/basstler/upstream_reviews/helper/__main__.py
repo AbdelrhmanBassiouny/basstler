@@ -173,7 +173,7 @@ class HelperScript:
         """
         :return: The shell command running the fetch module from its own source.
         """
-        source = self.code_only(Path(fetch.__file__).read_text())
+        source = self.code_only(Path(fetch.__file__).read_text(encoding="utf-8"))
         configuration = json.dumps(self.configuration, separators=(",", ":"))
         return "\n".join(
             [

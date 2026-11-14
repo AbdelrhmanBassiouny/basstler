@@ -4,13 +4,13 @@ The fixture plan's items, and the requests and stand-ins the item-bootstrap test
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass, field
 from typing import Any
 
 import yaml
 
 import basstler.plan.item_bootstrap
+from basstler.directory_tree import DirectoryTree
 from basstler.github.pull_request import NewPullRequest
 from basstler.github.repository import PullRequestReference
 from basstler.plan.item_bootstrap.exceptions import PullRequestRefusedError
@@ -55,13 +55,17 @@ the package's own directory on ``sys.path`` in place of the project root.
 PLAN_IDENTIFIER = "test-plan"
 
 
-PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "bootstrap-plan.yaml").read_text()
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "bootstrap-plan.yaml").read_text(
+    encoding="utf-8"
+)
 """
 The manifest every test starts from.
 """
 
 
-PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "bootstrap-roadmap.md").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "bootstrap-roadmap.md").read_text(
+    encoding="utf-8"
+)
 """
 The roadmap every test starts from.
 """
@@ -93,7 +97,7 @@ The session recorded on an item whose work was opened.
 
 INDENTLESS_PLAN_MANIFEST = (
     DatasetLocation.DIRECTORY / "bootstrap-plan-indentless-items.yaml"
-).read_text()
+).read_text(encoding="utf-8")
 """
 The fixture plan written the way a YAML dumper writes it: every item flush with
 ``items:``, and the fixture's further items - written-out dependencies, a literal note -
@@ -225,12 +229,12 @@ def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
     :return: Each document's content.
     """
     checkout = repository.project_root.parent / "published-plan-checkout"
-    shutil.rmtree(checkout, ignore_errors=True)
+    DirectoryTree(checkout).remove()
     repository.clone_notes_branch(checkout)
     return {
         document: (
             checkout / document.path_within_notes_branch(PLAN_IDENTIFIER)
-        ).read_text()
+        ).read_text(encoding="utf-8")
         for document in PlanDocument
     }
 

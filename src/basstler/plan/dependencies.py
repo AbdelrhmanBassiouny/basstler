@@ -331,7 +331,9 @@ class PlanDirectory:
         manifest_path = self.directory / plan_id / PlanDocument.MANIFEST
         if not manifest_path.is_file():
             return None
-        plan = Plan.from_mapping(yaml.safe_load(manifest_path.read_text()))
+        plan = Plan.from_mapping(
+            yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        )
         self.plans_by_id[plan_id] = plan
         return plan
 

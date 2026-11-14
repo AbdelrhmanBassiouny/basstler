@@ -154,6 +154,11 @@ class FileMode(IntEnum):
     Readable and runnable by everyone, writable by its owner.
     """
 
+    READ_ONLY_DIRECTORY = 0o555
+    """
+    A directory everyone can list and enter but no one can add to or delete from.
+    """
+
 
 class BashStubVariable(StrEnum):
     """

@@ -31,7 +31,7 @@ The console script the package installs beside the interpreter running the tests
 )
 def test_the_command_reports_the_installed_package_version(invocation):
     result = subprocess.run(
-        [*invocation, "--version"], capture_output=True, text=True, check=False
+        [*invocation, "--version"], capture_output=True, encoding="utf-8", check=False
     )
 
     assert (result.returncode, result.stdout.strip()) == (

@@ -185,5 +185,5 @@ class BoardExport:
         :return: The path written to.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.as_json() + "\n")
+        path.write_text(self.as_json() + "\n", encoding="utf-8")
         return path

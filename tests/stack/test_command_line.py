@@ -50,7 +50,7 @@ def offline_checkout(scratch_repository: ScratchRepository) -> ScratchRepository
     scratch_repository.resolve_notes_remote_to()
     scratch_repository.write(
         ProjectLocation.PROJECT_STACK_CONFIGURATION,
-        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(),
+        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(encoding="utf-8"),
     )
     return scratch_repository
 

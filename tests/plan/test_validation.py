@@ -408,13 +408,13 @@ def test_validation_accepts_a_branch_the_saved_copy_of_the_same_plan_names(tmp_p
     plan = minimal_plan()
     saved_copy = tmp_path / PLAN_UNDER_TEST_ID / PlanDocument.MANIFEST
     saved_copy.parent.mkdir()
-    saved_copy.write_text(yaml.safe_dump(plan))
+    saved_copy.write_text(yaml.safe_dump(plan), encoding="utf-8")
     PlanValidator(plan, PlanDirectory(tmp_path)).validate()
 
 
 def test_a_sibling_plan_that_is_no_mapping_does_not_stop_the_branch_check(tmp_path):
     sibling = tmp_path / FixturePlanId.ABSENT / PlanDocument.MANIFEST
     sibling.parent.mkdir()
-    sibling.write_text("- not a plan\n")
+    sibling.write_text("- not a plan\n", encoding="utf-8")
 
     PlanValidator(minimal_plan(), PlanDirectory(tmp_path)).validate()

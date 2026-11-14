@@ -608,7 +608,9 @@ def test_the_configured_upstream_reaches_the_query():
 def test_the_upstream_is_read_from_the_configuration_file(tmp_path):
     configured = Repository("some-organization", "some-repository")
     configuration = tmp_path / "stack.toml"
-    configuration.write_text(UPSTREAM_SETTING_TEMPLATE.format(repository=configured))
+    configuration.write_text(
+        UPSTREAM_SETTING_TEMPLATE.format(repository=configured), encoding="utf-8"
+    )
 
     assert (
         resolve_upstream_repository(
@@ -622,7 +624,9 @@ def test_an_explicit_override_outranks_the_configuration_file(tmp_path):
     configured = Repository("some-organization", "some-repository")
     overriding = Repository("override-organization", "override-repository")
     configuration = tmp_path / "stack.toml"
-    configuration.write_text(UPSTREAM_SETTING_TEMPLATE.format(repository=configured))
+    configuration.write_text(
+        UPSTREAM_SETTING_TEMPLATE.format(repository=configured), encoding="utf-8"
+    )
 
     assert (
         resolve_upstream_repository(
@@ -823,7 +827,7 @@ def test_the_query_and_variables_are_sent_as_the_request_body(
     GitHubCommandLineClient().execute(sent.query, sent.variables)
 
     assert (
-        json.loads(call_log.read_text())
+        json.loads(call_log.read_text(encoding="utf-8"))
         == GraphQLRequest(sent.query, sent.variables).to_json()
     )
 
@@ -861,7 +865,7 @@ def test_a_job_log_is_asked_for_by_the_job_s_own_endpoint(
 
     GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
 
-    assert call_log.read_text().strip() == UPSTREAM.job_log_path(
+    assert call_log.read_text(encoding="utf-8").strip() == UPSTREAM.job_log_path(
         RECORDED_JOB_IDENTIFIER
     )
 

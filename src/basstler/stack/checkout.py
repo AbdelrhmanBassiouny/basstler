@@ -176,7 +176,7 @@ class CurrentCheckout:
         return subprocess.run(
             [GitArgument.GIT, *arguments],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             cwd=Path.cwd(),
         )
 

@@ -130,7 +130,7 @@ def test_a_large_change_is_described_within_its_budget(fork_checkout: ForkChecko
     for commit in range(commits):
         for number in range(8):
             path = fork_checkout.project_root / f"module_{commit:02d}_{number}.py"
-            path.write_text("a line\n" * (commit + 1))
+            path.write_text("a line\n" * (commit + 1), encoding="utf-8")
         fork_checkout.run_git("add", ".")
         fork_checkout.run_git("commit", "--quiet", "-m", f"change number {commit}")
     fork_checkout.run_git(

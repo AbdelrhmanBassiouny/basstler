@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 import basstler.upstream_reviews.helper.fetch
+from basstler.bash import Bash
 from basstler.github.rest_models import (
     RestPullRequestSummary,
 )
@@ -108,10 +109,13 @@ def stubbed_gh(tmp_path, monkeypatch) -> Path:
     installed.chmod(installed.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("PATH", f"{stub_directory}{os.pathsep}{os.environ['PATH']}")
     responses = tmp_path / "responses.json"
-    responses.write_text(json.dumps(pull_request_responses()))
+    responses.write_text(json.dumps(pull_request_responses()), encoding="utf-8")
     monkeypatch.setenv("STUB_GH_RESPONSES", str(responses))
     logs = tmp_path / "logs.json"
-    logs.write_text(json.dumps({UPSTREAM.job_log_path(FAILED_JOB): FAILED_JOB_LOG}))
+    logs.write_text(
+        json.dumps({UPSTREAM.job_log_path(FAILED_JOB): FAILED_JOB_LOG}),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("STUB_GH_JOB_LOGS", str(logs))
     return responses
 
@@ -121,7 +125,10 @@ def add_responses(responses: Path, extra: dict[str, object]) -> None:
     :param responses: The file the stub reads.
     :param extra: More paths for it to answer.
     """
-    responses.write_text(json.dumps(json.loads(responses.read_text()) | extra))
+    responses.write_text(
+        json.dumps(json.loads(responses.read_text(encoding="utf-8")) | extra),
+        encoding="utf-8",
+    )
 
 
 def run_fetch(helper_request: UpstreamReadRequest) -> str:
@@ -132,9 +139,9 @@ def run_fetch(helper_request: UpstreamReadRequest) -> str:
     :return: What it printed.
     """
     completed = subprocess.run(
-        ["bash", "-c", HelperScript(helper_request).render()],
+        Bash.locate(os.environ).command("-c", HelperScript(helper_request).render()),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     )
     return completed.stdout
@@ -286,7 +293,7 @@ def test_the_helper_records_exactly_the_paths_a_direct_read_asks_for(stubbed_gh)
 
 
 def test_a_failing_gh_fails_the_fetch_with_its_error(stubbed_gh):
-    stubbed_gh.write_text("{}")
+    stubbed_gh.write_text("{}", encoding="utf-8")
 
     with pytest.raises(subprocess.CalledProcessError) as raised:
         run_fetch(request())
@@ -324,7 +331,7 @@ def test_output_too_long_for_one_command_is_split_into_files(stubbed_gh, monkeyp
 
     printed = run_fetch(helper_request)
     output = "".join(
-        Path(line.removeprefix("cat ")).read_text()
+        Path(line.removeprefix("cat ")).read_text(encoding="utf-8")
         for line in printed.splitlines()
         if line.startswith("cat ")
     )
@@ -341,7 +348,9 @@ def test_output_too_long_for_one_command_is_split_into_files(stubbed_gh, monkeyp
 
 def test_the_shipped_source_is_code_alone_and_runs_without_basstler():
     source = HelperScript.code_only(
-        Path(basstler.upstream_reviews.helper.fetch.__file__).read_text()
+        Path(basstler.upstream_reviews.helper.fetch.__file__).read_text(
+            encoding="utf-8"
+        )
     )
 
     assert '"""' not in source
@@ -431,8 +440,12 @@ def test_a_chunk_is_found_however_deeply_the_transcript_quotes_it():
 def test_the_transcript_is_every_file_named_after_the_session(tmp_path):
     for project in ["-home-user", "-home-user-project"]:
         (tmp_path / "projects" / project).mkdir(parents=True)
-        (tmp_path / "projects" / project / "session.jsonl").write_text("")
-    (tmp_path / "projects" / "-home-user" / "other.jsonl").write_text("")
+        (tmp_path / "projects" / project / "session.jsonl").write_text(
+            "", encoding="utf-8"
+        )
+    (tmp_path / "projects" / "-home-user" / "other.jsonl").write_text(
+        "", encoding="utf-8"
+    )
 
     files = SessionTranscript("session", tmp_path).files
 
@@ -486,7 +499,8 @@ def test_prompt_then_report_reads_the_helper_output_from_the_transcript(
     )
     capsys.readouterr()
     session.write_text(
-        json.dumps({"stdout": run_fetch(UpstreamReadRequest.load())}) + "\n"
+        json.dumps({"stdout": run_fetch(UpstreamReadRequest.load())}) + "\n",
+        encoding="utf-8",
     )
 
     assert main(["report"]) == 0

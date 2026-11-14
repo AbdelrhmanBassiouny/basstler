@@ -19,7 +19,9 @@ from basstler.github.exceptions import GitHubRequestFailed
 
 from ..constants.paths import DatasetLocation
 
-SITE_DETAILS = json.loads(DatasetLocation.REPOSITORY_TRUNK_DEFAULT_BRANCH.read_text())
+SITE_DETAILS = json.loads(
+    DatasetLocation.REPOSITORY_TRUNK_DEFAULT_BRANCH.read_text(encoding="utf-8")
+)
 """
 The resource the stand-in site repository answers with.
 """

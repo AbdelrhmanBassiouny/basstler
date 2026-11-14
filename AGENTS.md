@@ -167,6 +167,12 @@
 - The package depends only on the libraries `pyproject.toml` lists. Code that comes from `krrood` is copied, never imported; until krrood's light core is released, a copied module says so and cites krrood with `` :cite:`krrood` ``, whose entry is in `docs/references.bib`
 - A package imports only the basstler packages its pyproject lists: every module belongs to a distribution declared in `basstler.package_map`, and imports only from that distribution and the ones it lists (checked by `basstler code-rules check`)
 
+## Portability
+<!-- from PortabilityRules in basstler/code_rules/rules/project.py -->
+- Start bash through `basstler.bash.Bash`, never by its name: Windows resolves a bare `bash` to WSL's launcher instead of Git Bash (checked by `basstler code-rules check`)
+- Read and write text as UTF-8: pass `encoding="utf-8"` to every `read_text`, `write_text`, text-mode `open` and `subprocess` call that decodes its output, never `text=True`. Windows falls back to a code page that cannot encode most of Unicode (checked by `basstler code-rules check`)
+- Remove a directory through `basstler.directory_tree.DirectoryTree`, never with `shutil.rmtree`: Windows refuses to delete the read-only object files git leaves in a clone (checked by `basstler code-rules check`)
+
 ## Agent instructions
 <!-- from AgentInstructionsRules in basstler/code_rules/rules/project.py -->
 - `AGENTS.md` is generated from the sections in `basstler.code_rules.rules`; change a rule there and run `basstler code-rules agents-md`, never edit the file

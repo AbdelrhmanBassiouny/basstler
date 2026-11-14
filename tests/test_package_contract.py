@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.bash import Bash
 from basstler.environment import GitBashVariable
 from basstler.locations import (
     ClaudeCodeVariable,
@@ -71,12 +72,13 @@ class ConfiguredInterpreterRunner(ScriptRunner):
     @property
     def command(self) -> tuple[str, ...]:
         """:return: bash sourcing the configuration, then handing over to this interpreter."""
-        return (
-            "bash",
-            "-c",
-            'source "$0" && exec "$@"',
-            str(SHELL_CONFIGURATION),
-            sys.executable,
+        return tuple(
+            Bash.locate(os.environ).command(
+                "-c",
+                'source "$0" && exec "$@"',
+                str(SHELL_CONFIGURATION),
+                sys.executable,
+            )
         )
 
 
@@ -118,7 +120,9 @@ def invocation_of(module: PackageModule) -> re.Pattern[str]:
     :param module: The module to invoke.
     :return: A pattern matching any of those invocations.
     """
-    assignments = MODULE_VARIABLE.findall(SHELL_CONFIGURATION.read_text())
+    assignments = MODULE_VARIABLE.findall(
+        SHELL_CONFIGURATION.read_text(encoding="utf-8")
+    )
     variables = [
         rf"\$\{{?{variable}\b"
         for variable, path in assignments
@@ -168,7 +172,9 @@ def test_the_plugin_manifest_names_no_version():
     A version in the manifest would need a commit after each release, and would keep
     marketplace installs on it until it changed.
     """
-    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
+    manifest = json.loads(
+        RepositoryLocation.PLUGIN_MANIFEST.read_text(encoding="utf-8")
+    )
 
     assert PluginManifestKey.VERSION not in manifest
 
@@ -225,7 +231,7 @@ def workflows_that_run_a_module() -> tuple[tuple[Path, PackageModule], ...]:
         (workflow_path, module)
         for workflow_path in sorted(WORKFLOWS_DIRECTORY.glob("*.yml"))
         for module in package_modules()
-        if invocation_of(module).search(workflow_path.read_text())
+        if invocation_of(module).search(workflow_path.read_text(encoding="utf-8"))
     )
 
 
@@ -240,13 +246,17 @@ def package_entry_point() -> PackageModule:
 
 
 def test_a_workflow_that_only_names_the_repository_runs_no_module():
-    workflow_text = DatasetLocation.WORKFLOW_NAMING_THE_REPOSITORY.read_text()
+    workflow_text = DatasetLocation.WORKFLOW_NAMING_THE_REPOSITORY.read_text(
+        encoding="utf-8"
+    )
 
     assert invocation_of(package_entry_point()).search(workflow_text) is None
 
 
 def test_a_workflow_that_runs_the_entry_point_is_found():
-    workflow_text = DatasetLocation.WORKFLOW_RUNNING_THE_PACKAGE.read_text()
+    workflow_text = DatasetLocation.WORKFLOW_RUNNING_THE_PACKAGE.read_text(
+        encoding="utf-8"
+    )
 
     assert invocation_of(package_entry_point()).search(workflow_text) is not None
 
@@ -265,7 +275,7 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     assert [
         workflow_path.name
         for workflow_path, _ in running
-        if not installs_the_dependencies(workflow_path.read_text())
+        if not installs_the_dependencies(workflow_path.read_text(encoding="utf-8"))
     ] == []
 
 
@@ -285,7 +295,7 @@ def test_the_example_caller_uses_one_branch_or_tag_throughout():
     """
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
-    references = BASSTLER_REFERENCE.findall(caller.read_text())
+    references = BASSTLER_REFERENCE.findall(caller.read_text(encoding="utf-8"))
 
     assert len(references) == 2
     assert len(set(references)) == 1
@@ -389,10 +399,12 @@ def variables_the_configuration_defines() -> frozenset[str]:
     """
     return frozenset(
         subprocess.run(
-            ["bash", "-c", 'source "$0" && compgen -v', SHELL_CONFIGURATION],
+            Bash.locate(os.environ).command(
+                "-c", 'source "$0" && compgen -v', SHELL_CONFIGURATION
+            ),
             cwd=RepositoryLocation.ROOT.value,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=True,
             env={
                 SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.environ[
@@ -412,7 +424,9 @@ def test_every_variable_a_skill_document_names_is_defined():
     named = {
         variable_name
         for document in RepositoryLocation.PLUGIN.value.rglob("*.md")
-        for variable_name in SHELL_VARIABLE_REFERENCE.findall(document.read_text())
+        for variable_name in SHELL_VARIABLE_REFERENCE.findall(
+            document.read_text(encoding="utf-8")
+        )
     }
 
     assert named != set()

@@ -144,7 +144,9 @@ class SiteDigest:
         """
         Write :attr:`value` to the site's :attr:`SiteFile.DIGEST`.
         """
-        (self.site_directory / SiteFile.DIGEST).write_text(f"{self.value}\n")
+        (self.site_directory / SiteFile.DIGEST).write_text(
+            f"{self.value}\n", encoding="utf-8"
+        )
 
 
 # %% a plan as the notes branch stores it
@@ -182,8 +184,12 @@ class PlanSource:
         roadmap = directory / PlanDocument.ROADMAP
         return cls(
             directory_name=directory.name,
-            manifest=yaml.safe_load((directory / PlanDocument.MANIFEST).read_text()),
-            roadmap_text=roadmap.read_text() if roadmap.exists() else "",
+            manifest=yaml.safe_load(
+                (directory / PlanDocument.MANIFEST).read_text(encoding="utf-8")
+            ),
+            roadmap_text=roadmap.read_text(encoding="utf-8")
+            if roadmap.exists()
+            else "",
         )
 
     @classmethod
@@ -265,7 +271,7 @@ class SiteSection[SectionCard: ProgressCard](ABC):
         :param html: The page's rendered HTML.
         """
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / SiteFile.PAGE).write_text(html)
+        (directory / SiteFile.PAGE).write_text(html, encoding="utf-8")
 
 
 @dataclass
@@ -451,7 +457,9 @@ class HubSite(SiteSection[SiteSummary]):
             ]
         summary = SiteSummary.over_repositories(repositories)
         self.write_page(output, HubPage(summary, self.stylesheet_url).render())
-        (output / SiteFile.STYLESHEET).write_text(SiteStylesheet().render())
+        (output / SiteFile.STYLESHEET).write_text(
+            SiteStylesheet().render(), encoding="utf-8"
+        )
         (output / SiteFile.NO_JEKYLL).touch()
         SiteDigest(output).write()
         return summary

@@ -90,7 +90,7 @@ def saved_progress(
         checkout
         / PersonalNotesPath.PULL_REQUEST_PROGRESS
         / f"{branch}{ProgressNotesFile.SUFFIX}"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
 
 def test_progress_within_the_limit_is_saved(progress_repository: ScratchRepository):
@@ -126,7 +126,7 @@ def test_a_named_branch_s_progress_is_saved_under_that_branch(
     """
     progress = "- Next: resolve the review.\n"
     source = tmp_path / "item-progress.md"
-    source.write_text(progress)
+    source.write_text(progress, encoding="utf-8")
 
     result = progress_repository.run_hook_script(
         HookFile.SAVE_PULL_REQUEST_PROGRESS,
@@ -161,7 +161,7 @@ def test_the_personal_notes_branch_is_refused_as_a_named_branch(
     progress_repository: ScratchRepository, tmp_path
 ):
     source = tmp_path / "item-progress.md"
-    source.write_text("- Next: nothing.\n")
+    source.write_text("- Next: nothing.\n", encoding="utf-8")
 
     result = progress_repository.run_hook_script(
         HookFile.SAVE_PULL_REQUEST_PROGRESS,

@@ -4,11 +4,14 @@ Tests for the manifest vocabulary and exit statuses the item-bootstrap commands 
 
 from __future__ import annotations
 
+import os
+
 import subprocess
 
 import pytest
 import yaml
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap.exceptions import (
     BranchAlreadyPublishedError,
@@ -58,7 +61,7 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
 
 NARROWLY_INDENTED_MANIFEST = (
     DatasetLocation.DIRECTORY / "narrowly-indented-plan.yaml"
-).read_text()
+).read_text(encoding="utf-8")
 """
 A manifest predating this module's own formatting convention: its items list has no
 indent before the ``-`` and its fields sit two spaces in, not the four
@@ -164,18 +167,17 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     mirrors drifting, since each pair is edited in different files.
     """
     resolved = subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             f'source "{RepositoryLocation.PLUGIN / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
             'printf "%s\\n%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")" '
             '"${PLAN_HUB_PATH}"',
             "test",
             PLAN_IDENTIFIER,
-        ],
+        ),
         cwd=bootstrap_repository.project_root,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     )
     plans_directory, manifest_path, hub_path = resolved.stdout.strip().split("\n")
@@ -193,15 +195,14 @@ def test_the_branch_index_matches_the_shell_configuration_that_owns_it(
     ``ProjectLocation.PLAN_BRANCH_INDEX`` mirrors ``PLAN_BRANCH_INDEX_PATH``.
     """
     resolved = subprocess.run(
-        [
-            "bash",
+        Bash.locate(os.environ).command(
             "-c",
             f'source "{RepositoryLocation.PLUGIN / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
             'printf "%s" "${PLAN_BRANCH_INDEX_PATH}"',
-        ],
+        ),
         cwd=bootstrap_repository.project_root,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     )
     assert resolved.stdout == str(ProjectLocation.PLAN_BRANCH_INDEX)

@@ -37,7 +37,7 @@ def file_on_remote(checkout: ForkCheckout, branch: str, path: str) -> str:
         cwd=checkout.fork_path,
         check=True,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     ).stdout.strip()
 
 

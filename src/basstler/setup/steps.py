@@ -153,7 +153,7 @@ def git_value(project_root: Path, *arguments: str) -> str | None:
         ["git", *arguments],
         cwd=project_root,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     if completed.returncode != 0:
         return None
@@ -660,7 +660,7 @@ class PersonalUpstream:
             ],
             cwd=project_root,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         )
         return shown.stdout if shown.returncode == 0 else ""
 
@@ -673,7 +673,9 @@ class PersonalUpstream:
         """
         with tempfile.TemporaryDirectory() as scratch_directory:
             scratch_file = Path(scratch_directory) / "stack.toml"
-            scratch_file.write_text(self.written_over(self.existing(project_root)))
+            scratch_file.write_text(
+                self.written_over(self.existing(project_root)), encoding="utf-8"
+            )
             written = subprocess.run(
                 Bash.locate(os.environ).command(
                     PluginRoot.locate(os.environ).path_of(
@@ -688,7 +690,7 @@ class PersonalUpstream:
                 ),
                 cwd=project_root,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
             )
         if written.returncode != 0:
             raise PersonalNotesWriteRefusedError(

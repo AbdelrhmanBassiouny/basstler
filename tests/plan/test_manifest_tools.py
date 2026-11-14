@@ -69,7 +69,7 @@ def write_manifest(
     :return: The written file's path.
     """
     manifest_path = directory / name
-    manifest_path.write_text(f"id: {plan_id}\n")
+    manifest_path.write_text(f"id: {plan_id}\n", encoding="utf-8")
     return manifest_path
 
 
@@ -83,7 +83,7 @@ def test_reads_the_id_field(tmp_path):
 
 def test_defaults_to_empty_string_when_id_is_missing(tmp_path):
     manifest_path = tmp_path / PlanDocument.MANIFEST
-    manifest_path.write_text("title: No id here\n")
+    manifest_path.write_text("title: No id here\n", encoding="utf-8")
     assert PlanManifest(manifest_path).identifier == ""
 
 
@@ -100,7 +100,7 @@ def _write_plan(plans_directory: Path, plan_id: str, items_yaml: str) -> None:
     plan_directory = plans_directory / plan_id
     plan_directory.mkdir(parents=True)
     (plan_directory / PlanDocument.MANIFEST).write_text(
-        f"id: {plan_id}\nitems:\n{items_yaml}"
+        f"id: {plan_id}\nitems:\n{items_yaml}", encoding="utf-8"
     )
 
 
@@ -199,7 +199,7 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
     )
     exit_code = main()
     assert exit_code == ManifestToolsExitCode.SUCCESS
-    assert output_path.read_text() == "branch-1\tplan-a\n"
+    assert output_path.read_text(encoding="utf-8") == "branch-1\tplan-a\n"
 
 
 # %% main - validating a manifest before it is saved
@@ -234,7 +234,9 @@ def test_validate_refuses_a_manifest_the_plan_site_rejects_and_says_why(
     """
     with pytest.raises(PlanValidationError) as expected:
         PlanValidator(
-            yaml.safe_load(DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text())
+            yaml.safe_load(
+                DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text(encoding="utf-8")
+            )
         ).validate()
 
     status = run_validate(monkeypatch, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.value)
@@ -262,7 +264,8 @@ def run_validate_against_plans(
     manifest_path.write_text(
         yaml.safe_dump(
             minimal_plan(items=[manifest_item("a", depends_on=[dependency_text])])
-        )
+        ),
+        encoding="utf-8",
     )
     monkeypatch.setattr(
         sys,

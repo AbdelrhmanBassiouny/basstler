@@ -11,7 +11,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
+from pathlib import PurePosixPath
 from types import ModuleType
 from typing import Any
 
@@ -150,9 +150,9 @@ class Section(AgentRule, Enum):
         return f"{'#' * cls.depth} {cls.title}"
 
     @classproperty
-    def source_path(cls) -> Path:
+    def source_path(cls) -> PurePosixPath:
         """
         The path of the module declaring the section, relative to the directory its top-
-        level package or module lies in.
+        level package or module lies in, written with forward slashes on every platform.
         """
-        return Path(*cls.__module__.split(".")).with_suffix(".py")
+        return PurePosixPath(*cls.__module__.split(".")).with_suffix(".py")

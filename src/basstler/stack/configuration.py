@@ -138,9 +138,9 @@ class CommittedStackConfiguration:
         """
         :return: The shipped values, with every key the project sets replaced by its own.
         """
-        values = tomllib.loads(self.shipped.read_text())
+        values = tomllib.loads(self.shipped.read_text(encoding="utf-8"))
         if self.project_file.is_file():
-            values.update(tomllib.loads(self.project_file.read_text()))
+            values.update(tomllib.loads(self.project_file.read_text(encoding="utf-8")))
         return values
 
     def upstream_repository(self) -> Repository:

@@ -114,16 +114,18 @@ def briefed_repository(scratch_repository: ScratchRepository) -> ScratchReposito
         {
             PlanDocument.MANIFEST.path_within_notes_branch(
                 BRIEFED_MANIFEST.identifier
-            ): DatasetLocation.BRIEF_PLAN.read_text(),
+            ): DatasetLocation.BRIEF_PLAN.read_text(encoding="utf-8"),
             PlanDocument.ROADMAP.path_within_notes_branch(
                 BRIEFED_MANIFEST.identifier
-            ): DatasetLocation.BRIEF_ROADMAP.read_text(),
-            ProjectLocation.PLAN_RULES: DatasetLocation.REPOSITORY_RULES.read_text(),
+            ): DatasetLocation.BRIEF_ROADMAP.read_text(encoding="utf-8"),
+            ProjectLocation.PLAN_RULES: DatasetLocation.REPOSITORY_RULES.read_text(
+                encoding="utf-8"
+            ),
             PlanDocument.MANIFEST.path_within_notes_branch(
                 FOREIGN_MANIFEST.identifier
             ): (
                 DatasetLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST
-            ).read_text(),
+            ).read_text(encoding="utf-8"),
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -203,7 +205,9 @@ def test_the_brief_holds_the_plans_standing_rules(
 
     assert (
         brief[ItemBriefKey.STANDING_RULES]
-        == Roadmap.from_text(DatasetLocation.BRIEF_ROADMAP.read_text()).entries
+        == Roadmap.from_text(
+            DatasetLocation.BRIEF_ROADMAP.read_text(encoding="utf-8")
+        ).entries
     )
 
 
@@ -216,7 +220,7 @@ def test_the_brief_holds_the_repositorys_rules(
     assert brief[ItemBriefKey.REPOSITORY_RULES] == [
         {"id": rule.identifier, "text": rule.text}
         for rule in RepositoryRules.from_yaml(
-            DatasetLocation.REPOSITORY_RULES.read_text()
+            DatasetLocation.REPOSITORY_RULES.read_text(encoding="utf-8")
         ).rules
     ]
 

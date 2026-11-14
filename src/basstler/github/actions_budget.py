@@ -405,7 +405,8 @@ class ActionsBudget:
                     file_name: limits.differences_from(basstler_defaults)
                     for file_name, limits in sorted(self.overrides.items())
                 },
-            )
+            ),
+            encoding="utf-8",
         )
 
 

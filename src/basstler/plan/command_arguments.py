@@ -103,7 +103,7 @@ class PlanCommandArguments:
 
     def read_manifest(self) -> Any:
         """The plan.yaml content, as ``yaml.safe_load`` returns it."""
-        return yaml.safe_load(self.plan_path.read_text())
+        return yaml.safe_load(self.plan_path.read_text(encoding="utf-8"))
 
     def read_pull_requests_by_repository(self) -> PullRequestsByRepository:
         """The live pull request state, parsed.
@@ -111,5 +111,5 @@ class PlanCommandArguments:
         :raises MalformedPullRequestDataError: If any entry can't be parsed.
         """
         return PullRequestRecord.parse_by_repository(
-            json.loads(self.pull_request_data_path.read_text())
+            json.loads(self.pull_request_data_path.read_text(encoding="utf-8"))
         )

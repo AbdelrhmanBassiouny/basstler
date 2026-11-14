@@ -12,12 +12,12 @@ access, no real personal-notes branch, no real GitHub credentials.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from basstler.directory_tree import DirectoryTree
 from basstler.github.constants import GitHubExecutable
 from basstler.github.issue import PostedIssueComment
 from basstler.locations import PluginLocation, ProjectLocation, RepositoryStateLocation
@@ -37,17 +37,19 @@ from ..executable_stubs import (
 from ..scratch_repository import ScratchRepository
 from ..script_runner import BashScriptRunner
 
-PLAN_MANIFEST_NOT_STARTED = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
+PLAN_MANIFEST_NOT_STARTED = (DatasetLocation.DIRECTORY / "plan.yaml").read_text(
+    encoding="utf-8"
+)
 PLAN_MANIFEST_IN_PROGRESS = (
     DatasetLocation.DIRECTORY / "plan-in-progress.yaml"
-).read_text()
+).read_text(encoding="utf-8")
 PLAN_MANIFEST_WITH_TRACKING_ISSUE = (
     DatasetLocation.DIRECTORY / "plan-with-tracking-issue.yaml"
-).read_text()
+).read_text(encoding="utf-8")
 PLAN_MANIFEST_TRACKING_ISSUE_NO_REPOSITORY = (
     DatasetLocation.DIRECTORY / "plan-tracking-issue-no-repository.yaml"
-).read_text()
-PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
+).read_text(encoding="utf-8")
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text(encoding="utf-8")
 
 PLAN_ID = "test-plan"
 
@@ -80,7 +82,7 @@ never change what a test asserts.
 
 def _run_git(*arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        ["git", *arguments], cwd=cwd, capture_output=True, text=True
+        ["git", *arguments], cwd=cwd, capture_output=True, encoding="utf-8"
     )
     assert result.returncode == 0, result.stderr
     return result
@@ -143,7 +145,7 @@ def write_plan_commit(
     checkout = (
         repository.project_root.parent / f"seed-checkout-{message.replace(' ', '-')}"
     )
-    shutil.rmtree(checkout, ignore_errors=True)
+    DirectoryTree(checkout).remove()
     _run_git(
         "clone",
         "--quiet",
@@ -157,13 +159,13 @@ def write_plan_commit(
     _run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
     plan_directory = checkout / ProjectLocation.PLANS / plan_id
     plan_directory.mkdir(parents=True, exist_ok=True)
-    (plan_directory / "plan.yaml").write_text(manifest)
-    (plan_directory / "roadmap.md").write_text(roadmap)
+    (plan_directory / "plan.yaml").write_text(manifest, encoding="utf-8")
+    (plan_directory / "roadmap.md").write_text(roadmap, encoding="utf-8")
     _run_git("add", str(plan_directory), cwd=checkout)
     _run_git("commit", "--quiet", "-m", message, cwd=checkout)
     _run_git("push", "--quiet", "origin", ScratchBranch.PERSONAL_NOTES, cwd=checkout)
     sha = _run_git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
-    shutil.rmtree(checkout)
+    DirectoryTree(checkout).remove()
     return sha
 
 
@@ -277,7 +279,7 @@ def test_uses_the_recorded_stamp_when_since_is_omitted(scratch_repo: ScratchRepo
         RepositoryStateLocation.PLAN_STATE_SYNC_STAMP
     )
     stamp.parent.mkdir(parents=True)
-    stamp.write_text(f"{sha_before}\n")
+    stamp.write_text(f"{sha_before}\n", encoding="utf-8")
     write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_IN_PROGRESS, PLAN_ROADMAP, "v2"
     )
@@ -300,7 +302,7 @@ def test_stamp_is_updated_after_running(scratch_repo: ScratchRepository):
     stamp = scratch_repo.git.repository_state_path(
         RepositoryStateLocation.PLAN_STATE_SYNC_STAMP
     )
-    assert stamp.read_text().strip() == sha
+    assert stamp.read_text(encoding="utf-8").strip() == sha
     assert not (
         scratch_repo.project_root
         / ProjectLocation.CLAUDE_CODE_DIRECTORY
@@ -376,7 +378,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
 
     assert result.returncode == 0, result.stderr
     assert comment.formatted() in result.stdout
-    logged_call = call_log.read_text()
+    logged_call = call_log.read_text(encoding="utf-8")
     assert (
         f"repos/{TRACKING_ISSUE_REPOSITORY}/issues/{TRACKING_ISSUE_NUMBER}/comments"
         in logged_call
@@ -415,7 +417,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
 
     assert result.returncode == 0, result.stderr
     assert comment.formatted() in result.stdout
-    logged_call = call_log.read_text()
+    logged_call = call_log.read_text(encoding="utf-8")
     assert (
         f"repos/{TRACKING_ISSUE_REPOSITORY}/issues/{TRACKING_ISSUE_NUMBER}/comments"
         in logged_call

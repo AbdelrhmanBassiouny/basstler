@@ -152,6 +152,7 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
             name=ProjectDeclaration.of_this_package().name,
             dependencies=(UNINSTALLABLE_REQUIREMENT,),
         ).as_toml(),
+        encoding="utf-8",
     )
 
     result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
@@ -171,7 +172,9 @@ def test_refuses_when_the_declaration_cannot_be_read(
     A declaration the lookup cannot parse says nothing about what is installed, so it
     stops the save rather than reading as nothing missing.
     """
-    declaration_file(save_plan_repository).write_text("this is not toml\n")
+    declaration_file(save_plan_repository).write_text(
+        "this is not toml\n", encoding="utf-8"
+    )
 
     result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
 
@@ -189,10 +192,11 @@ def test_refuses_a_manifest_the_plan_site_would_reject(
     Nothing reaches the notes branch that the plan site could not then be built from.
     """
     manifest_path = save_plan_repository.write(
-        PlanDocument.MANIFEST, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text()
+        PlanDocument.MANIFEST,
+        DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text(encoding="utf-8"),
     )
     roadmap_path = save_plan_repository.write(
-        PlanDocument.ROADMAP, DatasetLocation.ROADMAP.read_text()
+        PlanDocument.ROADMAP, DatasetLocation.ROADMAP.read_text(encoding="utf-8")
     )
 
     result = run_save_plan(
@@ -341,13 +345,14 @@ def save_depending_on(
     )
     repository.update_notes_branch_file(
         ProjectLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST,
-        other_plan_manifest.read_text(),
+        other_plan_manifest.read_text(encoding="utf-8"),
     )
-    manifest = yaml.safe_load(DatasetLocation.PLAN.read_text())
+    manifest = yaml.safe_load(DatasetLocation.PLAN.read_text(encoding="utf-8"))
     manifest[ManifestKey.ITEMS.key][0][ManifestKey.DEPENDS_ON.key] = [dependency_text]
     manifest_path = repository.write(PlanDocument.MANIFEST, yaml.safe_dump(manifest))
     roadmap_path = repository.write(
-        PlanDocument.ROADMAP, DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text()
+        PlanDocument.ROADMAP,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(encoding="utf-8"),
     )
     return run_save_plan(
         repository,
@@ -389,7 +394,7 @@ def test_refuses_a_manifest_naming_a_plan_the_notes_branch_lacks(
 
 def test_manifest_without_roadmap_fails(save_plan_repository: ScratchRepository):
     manifest_path = save_plan_repository.write(
-        PlanDocument.MANIFEST, DatasetLocation.PLAN.read_text()
+        PlanDocument.MANIFEST, DatasetLocation.PLAN.read_text(encoding="utf-8")
     )
     result = run_save_plan(
         save_plan_repository,
@@ -405,7 +410,7 @@ def test_manifest_without_roadmap_fails(save_plan_repository: ScratchRepository)
 
 def test_roadmap_without_manifest_fails(save_plan_repository: ScratchRepository):
     roadmap_path = save_plan_repository.write(
-        PlanDocument.ROADMAP, DatasetLocation.ROADMAP.read_text()
+        PlanDocument.ROADMAP, DatasetLocation.ROADMAP.read_text(encoding="utf-8")
     )
     result = run_save_plan(
         save_plan_repository,
@@ -428,10 +433,10 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
     save_plan_repository.write(
         PersonalNotesPath.LOCAL_INSTRUCTIONS.value,
         f"<!-- BEGIN-PLAN-MANIFEST: {DatasetPlan.IDENTIFIER} -->\n"
-        f"{DatasetLocation.PLAN.read_text()}"
+        f"{DatasetLocation.PLAN.read_text(encoding='utf-8')}"
         "<!-- END-PLAN-MANIFEST -->\n"
         f"<!-- BEGIN-PLAN-ROADMAP: {DatasetPlan.IDENTIFIER} -->\n"
-        f"{DatasetLocation.ROADMAP.read_text()}"
+        f"{DatasetLocation.ROADMAP.read_text(encoding='utf-8')}"
         "<!-- END-PLAN-ROADMAP -->\n",
     )
 
@@ -444,12 +449,16 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
         save_plan_repository.project_root.parent / "verify-checkout"
     )
     plan_directory = verify_checkout / ProjectLocation.PLANS / DatasetPlan.IDENTIFIER
-    saved_manifest = (plan_directory / PlanDocument.MANIFEST).read_text()
-    saved_roadmap = (plan_directory / PlanDocument.ROADMAP).read_text()
-    assert saved_manifest == DatasetLocation.PLAN.read_text()
-    assert saved_roadmap == DatasetLocation.ROADMAP.read_text()
+    saved_manifest = (plan_directory / PlanDocument.MANIFEST).read_text(
+        encoding="utf-8"
+    )
+    saved_roadmap = (plan_directory / PlanDocument.ROADMAP).read_text(encoding="utf-8")
+    assert saved_manifest == DatasetLocation.PLAN.read_text(encoding="utf-8")
+    assert saved_roadmap == DatasetLocation.ROADMAP.read_text(encoding="utf-8")
 
-    branch_index = (verify_checkout / PersonalNotesPath.BRANCH_INDEX).read_text()
+    branch_index = (verify_checkout / PersonalNotesPath.BRANCH_INDEX).read_text(
+        encoding="utf-8"
+    )
     assert branch_index == f"item-a-branch\t{DatasetPlan.IDENTIFIER}\n"
 
 
@@ -654,11 +663,11 @@ def test_a_plan_with_every_item_landed_is_removed(
     plan_directory = ProjectLocation.PLANS / plan_identifier
     save_plan_repository.update_notes_branch_file(
         plan_directory / PlanDocument.MANIFEST,
-        DatasetLocation.PLAN_ALL_LANDED.read_text(),
+        DatasetLocation.PLAN_ALL_LANDED.read_text(encoding="utf-8"),
     )
     save_plan_repository.update_notes_branch_file(
         plan_directory / PlanDocument.ROADMAP,
-        DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
+        DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(encoding="utf-8"),
     )
 
     result = save_from_files(
@@ -792,9 +801,11 @@ def prepare_concurrent_writer(
     ):
         repository.run_git("config", setting, value, cwd=writer)
     if version is not None:
-        (writer / plan_path(PlanDocument.MANIFEST)).write_text(version.manifest_text)
+        (writer / plan_path(PlanDocument.MANIFEST)).write_text(
+            version.manifest_text, encoding="utf-8"
+        )
         repository.run_git("commit", "--quiet", "--all", "-m", "edit", cwd=writer)
-    (writer / ".git" / "writes-remaining").write_text(f"{writes}\n")
+    (writer / ".git" / "writes-remaining").write_text(f"{writes}\n", encoding="utf-8")
     hook = repository.project_root / ".git" / "hooks" / "pre-push"
     hook.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(DatasetLocation.CONCURRENT_WRITER_HOOK, hook)

@@ -114,7 +114,7 @@ class PromotionSummaries:
         """
         if path is None:
             return cls()
-        return cls.from_json(json.loads(path.read_text()))
+        return cls.from_json(json.loads(path.read_text(encoding="utf-8")))
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any]) -> PromotionSummaries:

@@ -101,7 +101,7 @@ def test_a_restack_keeps_what_the_branches_it_switches_to_do_not_have(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
     )
 
-    assert tooling.read_text() == TOOLING_CONTENT
+    assert tooling.read_text(encoding="utf-8") == TOOLING_CONTENT
 
 
 def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
