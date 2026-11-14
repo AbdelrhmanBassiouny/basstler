@@ -1,5 +1,5 @@
 {% extends "site_layout.html" %}
-{% from "site_parts.html" import dependency_chip, action_button with context %}
+{% from "site_parts.html" import dependency_chip, action_button, promotion_button with context %}
 {% block title %}{{ plan.title }}{% endblock %}
 {% block page_class %}hide-done{% endblock %}
 {% block page_id %}plan-page{% endblock %}
@@ -55,6 +55,7 @@
         {% endif %}
         {{ action_button(card.action) }}
         {{ action_button(card.pending_start_action, hidden=True) }}
+        {{ promotion_button(card.promotion) }}
       </article>
 {% endmacro %}
 

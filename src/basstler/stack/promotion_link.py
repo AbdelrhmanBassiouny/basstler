@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from basstler.class_property import classproperty
 from basstler.locations import ProjectLocation
+from basstler.github.repository import Repository
 from basstler.github.stack_configuration import (
     CommittedStackConfiguration,
     MissingUpstreamRepositoryError,
@@ -37,6 +38,39 @@ class PromotionLinkParameter(StrEnum):
 
     BODY = "body"
     """The description to prefill."""
+
+
+@dataclass(frozen=True)
+class PromotionTarget:
+    """Where a fork branch is promoted to: the upstream repository and branch, and the fork's owner."""
+
+    upstream_repository: Repository
+    """The repository the pull request is opened in."""
+
+    upstream_base: str
+    """The upstream branch it is opened against."""
+
+    fork_owner: str
+    """The account owning the fork the branch lives in."""
+
+    @classmethod
+    def from_configuration(cls, configuration: Configuration) -> PromotionTarget:
+        """
+        :param configuration: The resolved configuration naming both repositories.
+        :return: The target it describes.
+        :raises MissingUpstreamRepositoryError: If the project names no upstream.
+        """
+        upstream_repository = configuration.upstream_repository
+        if upstream_repository is None:
+            raise MissingUpstreamRepositoryError(
+                CommittedStackConfiguration().project_file,
+                ProjectLocation.PERSONAL_STACK_CONFIGURATION.value,
+            )
+        return cls(
+            upstream_repository=upstream_repository,
+            upstream_base=configuration.upstream_base,
+            fork_owner=configuration.fork_repository.owner,
+        )
 
 
 @dataclass(frozen=True)
@@ -76,18 +110,28 @@ class PromotionLink:
         :return: The link, flagged if the body was shortened.
         :raises MissingUpstreamRepositoryError: If the project names no upstream.
         """
-        upstream_repository = configuration.upstream_repository
-        if upstream_repository is None:
-            raise MissingUpstreamRepositoryError(
-                CommittedStackConfiguration().project_file,
-                ProjectLocation.PERSONAL_STACK_CONFIGURATION.value,
-            )
+        return cls.for_target(
+            PromotionTarget.from_configuration(configuration), branch, title, body
+        )
+
+    @classmethod
+    def for_target(
+        cls, target: PromotionTarget, branch: str, title: str, body: str
+    ) -> PromotionLink:
+        """Build the link promoting a fork branch to a target.
+
+        :param target: Where the branch is promoted to.
+        :param branch: The fork branch to promote.
+        :param title: Title to prefill.
+        :param body: Description to prefill, shortened if the URL would not otherwise fit.
+        :return: The link, flagged if the body was shortened.
+        """
 
         def url_for(text: str) -> str:
             return (
-                f"{upstream_repository.url}/compare/"
-                f"{configuration.upstream_base}..."
-                f"{configuration.fork_repository.owner}:{branch}"
+                f"{target.upstream_repository.url}/compare/"
+                f"{target.upstream_base}..."
+                f"{target.fork_owner}:{branch}"
                 f"?{PromotionLinkParameter.EXPAND}=1"
                 f"&{PromotionLinkParameter.TITLE}={quote(title)}"
                 f"&{PromotionLinkParameter.BODY}={quote(text)}"

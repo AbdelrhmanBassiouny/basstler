@@ -12,6 +12,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
+from basstler.github.repository import Repository
+from basstler.stack.promotability import PromotionBlocker
 
 from basstler.plan.dependencies import UnresolvedDependency
 
@@ -314,6 +316,46 @@ class ModelOption(StrEnum):
     """Claude Fable 5."""
 
 
+# %% promotion button
+
+
+@dataclass(frozen=True)
+class PromotionButton:
+    """
+    The button on an item's card that opens its pull request's prefilled form on the
+    upstream, or says why it cannot.
+    """
+
+    upstream_repository: Repository
+    """
+    The repository the pull request would be opened in.
+    """
+
+    url: str | None
+    """
+    The compare-and-create page, ``None`` while something blocks the promotion.
+    """
+
+    blockers: list[PromotionBlocker]
+    """
+    Every reason the pull request may not be promoted yet.
+    """
+
+    @property
+    def label(self) -> str:
+        """
+        :return: The button's text.
+        """
+        return f"Open in {self.upstream_repository}"
+
+    @property
+    def reason(self) -> str:
+        """
+        :return: Why the button is disabled, empty when it is not.
+        """
+        return "; ".join(blocker.value for blocker in self.blockers)
+
+
 # %% item cards
 
 
@@ -343,6 +385,12 @@ class ItemCard:
     """
     The start action of a not-started item that only open draft dependencies hold back;
     ``None`` for any other item.
+    """
+
+    promotion: PromotionButton | None = None
+    """
+    The button opening the item's pull request on the upstream; ``None`` unless the pull
+    request is open in a fork.
     """
 
 
