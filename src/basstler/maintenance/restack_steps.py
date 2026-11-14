@@ -15,32 +15,25 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.git.commands import (
+    CommitTrailer,
     GitCommandResult,
     GitCommandRunner,
+    IntegrationStrategy,
     ProposedPush,
 )
-from basstler.git.commit_move import (
+from basstler.stack.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,
     RefusalReason,
 )
-from basstler.github.constants import (
-    CommitTrailer,
-    MaintenanceText,
-    MergeableState,
-)
+from basstler.github.constants import MaintenanceText, MergeableState
 from basstler.github.pull_request_record import (
     PullRequestField,
 )
 from basstler.github.repository_access import ForkPullRequests
 from basstler.stack.label_write import LabelWrite
-from basstler.stack.model import (
-    IntegrationStrategy,
-    ParentSituation,
-    Stack,
-    StackBranch,
-)
+from basstler.stack.model import ParentSituation, Stack, StackBranch
 from basstler.stack.settings import Configuration
 
 # %% what became of one branch
@@ -715,7 +708,7 @@ class PublishBranch(RestackStep):
         git = restacking.git
         push = git.push(
             ProposedPush.publishing(
-                restacking.configuration,
+                restacking.configuration.fork_remote,
                 restacking.branch.name,
                 restacking.strategy,
                 replaces_superseded_merges=not git.contains(

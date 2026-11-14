@@ -11,13 +11,13 @@ import pytest
 from basstler.git.commands import GitCommandRunner
 from basstler.github.repository_access import GitHubRepository
 from basstler.locations import ClaudeCodeVariable
-from basstler.maintenance.board import UpstreamPullRequests
-from basstler.maintenance.commands import MaintenancePass
-from basstler.maintenance.upstream_action import (
+from basstler.upstream_reviews.action.open_pull_requests import (
     OpenPullRequestsAnswer,
     OpenPullRequestsRequest,
-    UpstreamReadRoute,
+    UpstreamPullRequests,
 )
+from basstler.maintenance.commands import MaintenancePass
+from basstler.maintenance.upstream_read_route import UpstreamReadRoute
 from basstler.upstream_reviews.action.__main__ import ActionCommand, main
 from basstler.upstream_reviews.action.branch import ActionFile, ActionInstallation
 from basstler.upstream_reviews.action.exchange import (

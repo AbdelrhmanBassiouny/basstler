@@ -16,7 +16,7 @@ from basstler.plan.dependencies import (
     PlanDirectory,
 )
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Item, Plan, Track, Wave
+from basstler.plan.structure import Item, Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 
 from ..constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory

@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from basstler.git.commands import BranchAncestry, GitCommandRunner
-from basstler.git.commit_move import CommitMoveChecks
+from basstler.git.commands import GitCommandRunner
+from basstler.stack.commit_move import BranchAncestry, CommitMoveChecks
 from basstler.github.repository_access import ForkPullRequests
 from basstler.maintenance.restack_steps import (
     BranchOutcome,

@@ -4,7 +4,8 @@
 {% block page_class %}hide-done{% endblock %}
 {% block page_id %}plan-page{% endblock %}
 
-{% macro item_card(item) %}
+{% macro item_card(card) %}
+{% set item = card.item %}
 {% set record = item.pull_request_record %}
       <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}" {{ vocabulary.live_state_attribute.ITEM_STATUS }}="{{ item.status.value }}">
         <h3>{{ item.title }}</h3>
@@ -23,10 +24,10 @@
           {% endif %}
         </div>
         <span class="item-identifier">{{ item.identifier }}</span>
-        {% if item.dependency_chips %}
+        {% if card.dependency_chips %}
         <div class="dependencies">
           <span>needs</span>
-          {% for chip in item.dependency_chips %}
+          {% for chip in card.dependency_chips %}
           {{ dependency_chip(chip) }}
           {% endfor %}
         </div>
@@ -52,9 +53,9 @@
           <div class="notes">{{ item.notes }}</div>
         </details>
         {% endif %}
-        {{ action_button(item.action) }}
-        {{ action_button(item.pending_start_action, hidden=True) }}
-        {{ promotion_button(item.promotion) }}
+        {{ action_button(card.action) }}
+        {{ action_button(card.pending_start_action, hidden=True) }}
+        {{ promotion_button(card.promotion) }}
       </article>
 {% endmacro %}
 
@@ -143,7 +144,7 @@
       {% for track_section in wave_section.tracks %}
       <h3 class="track-name">{{ track_section.track.name }}</h3>
       {% for item in track_section.items %}
-      {{ item_card(item) }}
+      {{ item_card(cards_by_identifier[item.identifier]) }}
       {% else %}
       <p class="track-empty">{{ track_section.empty_state_message }}</p>
       {% endfor %}

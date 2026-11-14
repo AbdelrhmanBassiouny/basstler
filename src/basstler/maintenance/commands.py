@@ -18,22 +18,24 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.command_line import Command
 from basstler.exit_codes import StackExitCode
-from basstler.git.commands import (
+from basstler.git.commands import GitCommandRunner, ProposedPush
+from basstler.stack.commit_move import (
     BranchAncestry,
-    GitCommandRunner,
-    ProposedPush,
-)
-from basstler.git.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,
 )
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.client import GitHubRestClient
 from basstler.github.constants import MaintenanceNotice
 from basstler.github.repository_access import GitHubRepository, PullRequestReader
 from basstler.locations import RepositoryStateLocation
-from basstler.maintenance.board import BoardExport, UpstreamPullRequests
+from basstler.maintenance.board import BoardExport
+from basstler.upstream_reviews.action.open_pull_requests import (
+    OpenPullRequestsAnswer,
+    OpenPullRequestsRequest,
+    UpstreamPullRequests,
+)
 from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
@@ -45,11 +47,7 @@ from basstler.maintenance.promotion import (
 from basstler.maintenance.promotion_context import PromotionContextReader
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
-from basstler.maintenance.upstream_action import (
-    OpenPullRequestsAnswer,
-    OpenPullRequestsRequest,
-    UpstreamReadRoute,
-)
+from basstler.maintenance.upstream_read_route import UpstreamReadRoute
 from basstler.maintenance.upstream_pull_request_synchronization import (
     UpstreamPullRequestSynchronization,
 )
@@ -130,7 +128,9 @@ class MaintenancePass:
                 self.upstream().open_pull_requests(), fork
             )
         read = ActionRead(
-            RemoteBranch(ActionBranch.NAME, self.git, self.configuration.fork_remote),
+            GitHubRemoteBranch(
+                ActionBranch.NAME, self.git, self.configuration.fork_remote
+            ),
             OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
             GitHubRestClient(),
             answer_type=OpenPullRequestsAnswer,

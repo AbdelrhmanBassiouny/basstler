@@ -27,7 +27,7 @@ from basstler.git.commands import (
     GitCommandResult,
     GitCommandRunner,
 )
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.actions_budget import ActionsBudget
 from basstler.github.client import (
     GitHubReader,
@@ -755,12 +755,12 @@ def test_a_written_dispatch_workflow_reads_back_its_site_repository():
 # %% the site the notes branch records
 
 
-def notes_branch_of(fork_checkout: ForkCheckout) -> RemoteBranch:
+def notes_branch_of(fork_checkout: ForkCheckout) -> GitHubRemoteBranch:
     """
     :param fork_checkout: The fork checkout.
     :return: Its notes branch on ``origin``.
     """
-    return RemoteBranch(
+    return GitHubRemoteBranch(
         NOTES_BRANCH, GitCommandRunner(fork_checkout.project_root), RemoteName.ORIGIN
     )
 
@@ -987,7 +987,7 @@ def test_a_merge_workflow_branch_without_the_default_branch_s_history_is_rebuilt
     """
     publishing.create(publishing.site.repository)
     publication = publishing.publication(publishing.runs_none())
-    RemoteBranch(
+    GitHubRemoteBranch(
         publication.merge_workflow_branch, publication.git, RemoteName.ORIGIN
     ).write(
         {

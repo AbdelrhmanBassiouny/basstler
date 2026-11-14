@@ -5,11 +5,8 @@ against in-memory board exports.
 
 from __future__ import annotations
 
-from basstler.stack.model import (
-    IntegrationStrategy,
-    PullRequest,
-    RestackPlanEntry,
-)
+from basstler.stack.model import PullRequest, RestackPlanEntry
+from basstler.git.commands import IntegrationStrategy
 
 from ..constants.stack import StackBranch
 from .dataset import (

@@ -29,7 +29,7 @@ from typing import Any
 
 import yaml
 
-from basstler.exceptions import OriginNamesNoRepository, PlanValidationError
+from basstler.plan.exceptions import OriginNamesNoRepository, PlanValidationError
 from basstler.exit_codes import CommandFailure, ManifestToolsExitCode
 from basstler.github.repository import Repository
 from basstler.plan import model

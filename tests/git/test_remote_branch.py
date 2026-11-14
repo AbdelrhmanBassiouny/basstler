@@ -11,7 +11,6 @@ from typing import Any
 
 from basstler.git.commands import GitCommandRunner
 from basstler.git.remote_branch import RemoteBranch
-from basstler.github.repository import Repository
 from basstler.json_model import JSONSerializable, ValidatedJSONModel
 
 from ..maintenance.fork import ForkCheckout, RemoteName
@@ -157,14 +156,6 @@ def test_two_branches_of_one_remote_are_kept_apart(fork_checkout):
 
     assert first.git.file_at(first.fetch(), "file.txt") == "first"
     assert second.git.file_at(second.fetch(), "file.txt") == "second"
-
-
-def test_the_branch_names_the_repository_its_remote_points_at(fork_checkout):
-    branch = branch_on_fork(fork_checkout, "first")
-
-    assert branch.repository == Repository.from_remote_url(
-        fork_checkout.fork_path.as_uri()
-    )
 
 
 def test_the_branch_s_url_is_its_remote_s_url(fork_checkout):

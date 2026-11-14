@@ -48,7 +48,7 @@ class Layer(IntEnum):
 
     COLLABORATION = 4
     """
-    Work on pull requests: upstream reviews, stacked pull requests and plans.
+    Work on pull requests: upstream reviews and stacked pull requests.
     """
 
     NOTES = 5
@@ -56,17 +56,22 @@ class Layer(IntEnum):
     The personal notes and their setup.
     """
 
-    USER_FACING = 6
+    PLANS = 6
+    """
+    Plans and their items, kept on the personal-notes branch.
+    """
+
+    USER_FACING = 7
     """
     What a user reads or invokes directly: the plan site hub and the skills.
     """
 
-    MCP = 7
+    MCP = 8
     """
     The Model Context Protocol server.
     """
 
-    META_PACKAGE = 8
+    META_PACKAGE = 9
     """
     The ``basstler`` distribution, which installs every default distribution.
     """
@@ -336,12 +341,6 @@ PACKAGE_MAP = PackageMap(
             ),
         ),
         DistributionDeclaration(
-            Distribution.PLAN,
-            Layer.COLLABORATION,
-            ("plan",),
-            (Distribution.CORE, Distribution.GIT, Distribution.GITHUB),
-        ),
-        DistributionDeclaration(
             Distribution.NOTES,
             Layer.NOTES,
             ("document_references", "personal_notes", "setup"),
@@ -351,6 +350,17 @@ PACKAGE_MAP = PackageMap(
                 Distribution.GITHUB,
                 Distribution.REVIEWS,
                 Distribution.STACK,
+            ),
+        ),
+        DistributionDeclaration(
+            Distribution.PLAN,
+            Layer.PLANS,
+            ("plan",),
+            (
+                Distribution.CORE,
+                Distribution.GIT,
+                Distribution.GITHUB,
+                Distribution.NOTES,
             ),
         ),
         DistributionDeclaration(

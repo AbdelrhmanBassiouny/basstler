@@ -13,7 +13,7 @@ import pytest
 from basstler.github.states import CombinedCheckState
 from basstler.maintenance.promotion import PromotionSummary
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Item, Plan, Track, Wave
+from basstler.plan.structure import Item, Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 from basstler.github.pull_request_state import (
     ForkLineage,
@@ -104,8 +104,8 @@ def promotion_of_first_item(page: PlanPage):
     :param page: A page not yet rendered.
     :return: The first item's promotion button, once the page is rendered.
     """
-    page.render()
-    return page.plan.items[0].promotion
+    rendered = page.render()
+    return rendered.cards_by_identifier[page.plan.items[0].identifier].promotion
 
 
 # %% a promotable item

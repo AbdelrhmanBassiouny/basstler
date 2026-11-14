@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.exceptions import PlanValidationError
+from basstler.plan.exceptions import PlanValidationError
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github.pull_request_record import (
     PullRequestField,
@@ -37,7 +37,7 @@ from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
@@ -253,8 +253,11 @@ def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
 def test_live_pull_requests_leave_out_a_number_the_repository_does_not_have(
     pull_request_source: RecordedPullRequestSource,
 ):
+    """
+    A pull request number its repository does not have is not in the live state.
+    """
     live_pull_requests = pull_request_source.live_pull_requests_of(
-        DependencyResolver(FIRST_PLAN)
+        DependencyResolver(FIRST_PLAN).pull_request_references
     )
     assert live_pull_requests.pull_requests_by_repository == {
         str(PLAN_REPOSITORY): {

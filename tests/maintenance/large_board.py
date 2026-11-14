@@ -20,13 +20,13 @@ from basstler.maintenance.promotion import Promotion
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack.model import (
-    IntegrationStrategy,
     PullRequest,
     Reparent,
     SkippedPullRequest,
     SkipReason,
     Stack,
 )
+from basstler.git.commands import IntegrationStrategy
 from basstler.stack.promotion_link import PromotionLink
 
 from .fork import (

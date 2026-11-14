@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from basstler.exceptions import PlanInAnotherRepository
+from basstler.plan.exceptions import PlanInAnotherRepository
 from basstler.exit_codes import ManifestToolsExitCode
 from basstler.github.repository import Repository
 from basstler.locations import PluginLocation, ProjectLocation

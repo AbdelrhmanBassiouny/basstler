@@ -14,7 +14,7 @@ from basstler.exit_codes import StackExitCode
 from basstler.github.states import CombinedCheckState
 from basstler.locations import ProjectLocation
 from basstler.stack.__main__ import Command, CommandOption
-from basstler.stack.configuration import StackSetting
+from basstler.github.stack_configuration import StackSetting
 from basstler.stack.exceptions import OwnRemoteNotFoundError
 from basstler.stack.model import PullRequest
 from basstler.stack.promotion_link import PromotionLink

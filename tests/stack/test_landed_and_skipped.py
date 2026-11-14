@@ -8,13 +8,13 @@ from __future__ import annotations
 import pytest
 
 from basstler.stack.model import (
-    IntegrationStrategy,
     PullRequest,
     Reparent,
     RestackPlanEntry,
     SkippedPullRequest,
     SkipReason,
 )
+from basstler.git.commands import IntegrationStrategy
 
 from ..constants.stack import StackBranch
 from .dataset import (

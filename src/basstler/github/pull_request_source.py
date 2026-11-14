@@ -5,7 +5,7 @@ Where the live state of the pull requests a plan references is read from.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
@@ -27,7 +27,6 @@ from basstler.github.pull_request_state import (
 from basstler.github.repository import PullRequestReference, Repository
 from basstler.github.repository_access import GitHubRepository
 from basstler.json_model import ValidatedJSONModel
-from basstler.plan.dependencies import DependencyResolver
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -129,23 +128,15 @@ class PullRequestSource(ABC):
         return None
 
     def live_pull_requests_of(
-        self, dependencies: DependencyResolver
+        self, references: Iterable[PullRequestReference]
     ) -> LivePullRequests:
         """
-        :param dependencies: A plan's items, plus the items of other plans it depends
-            on.
-        :return: The live state of every pull request those items name, and why each
-            repository that cannot be read cannot be; a number the repository does not
-            have is left out.
+        :param references: The pull requests to read.
+        :return: The live state of each of them, and why each repository that cannot be
+            read cannot be; a number the repository does not have is left out.
         """
         live_pull_requests = LivePullRequests()
-        for dependency in dependencies.resolved_dependencies:
-            if dependency.item.pull_request_number is None:
-                continue
-            reference = PullRequestReference(
-                Repository.parse(dependency.repository),
-                dependency.item.pull_request_number,
-            )
+        for reference in references:
             failure = self.read_failure_of(reference.repository)
             if failure is not None:
                 live_pull_requests.read_failures[reference.repository] = failure

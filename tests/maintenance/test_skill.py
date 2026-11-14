@@ -13,7 +13,7 @@ from __future__ import annotations
 import subprocess
 
 from basstler.github.repository import Repository
-from basstler.stack.configuration import CommittedStackConfiguration
+from basstler.github.stack_configuration import CommittedStackConfiguration
 
 from ..constants.paths import RepositoryLocation, SkillDirectory
 

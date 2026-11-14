@@ -15,7 +15,7 @@ from basstler.github.pull_request_state import (
 )
 from basstler.plan.model import ItemStatus
 from basstler.plan.validation import PlanValidator
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 
 from .plan_page_builders import (

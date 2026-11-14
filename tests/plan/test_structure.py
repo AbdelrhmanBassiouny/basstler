@@ -1,5 +1,5 @@
 """
-Tests for :mod:`basstler.plan_site.plan`: reading a plan's waves, tracks and items, and
+Tests for :mod:`basstler.plan.structure`: reading a plan's waves, tracks and items, and
 what an item answers about itself.
 """
 
@@ -12,7 +12,7 @@ from basstler.github.pull_request_state import (
 )
 from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 
 from ..manifest_builders import manifest_item, minimal_plan
 

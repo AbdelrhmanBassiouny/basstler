@@ -11,17 +11,14 @@ import dataclasses
 import shutil
 import subprocess
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from dataclasses import field as dataclasses_field
+from dataclasses import dataclass, field as dataclasses_field
 from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure
-from basstler.git.commands import (
-    BranchAncestry,
-    GitCommandRunner,
-)
+from basstler.git.commands import GitCommandRunner
+from basstler.stack.commit_move import BranchAncestry
 from basstler.github.pull_request_record import (
     CommitChecks,
     PullRequestField,
@@ -31,10 +28,8 @@ from basstler.github.pull_request_record import (
 from basstler.github.repository import Repository
 from basstler.github.states import CombinedCheckState
 from basstler.locations import ProjectLocation
-from basstler.maintenance.board import (
-    BoardExport,
-    UpstreamPullRequests,
-)
+from basstler.maintenance.board import BoardExport
+from basstler.upstream_reviews.action.open_pull_requests import UpstreamPullRequests
 from basstler.stack.model import (
     PullRequest,
     Stack,

@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import re
 
-from basstler.stack.configuration import CommittedStackConfiguration, StackSetting
+from basstler.github.stack_configuration import (
+    CommittedStackConfiguration,
+    StackSetting,
+)
 
 from ..constants.paths import RepositoryLocation, SkillDirectory
 

@@ -14,7 +14,7 @@ import pytest
 
 from basstler.github.repository import Repository
 from basstler.locations import PackageLocation, ProjectLocation
-from basstler.stack.configuration import StackSetting
+from basstler.github.stack_configuration import StackSetting
 from basstler.stack.exceptions import (
     AmbiguousForkRemoteError,
     ForkRemoteNotFoundError,

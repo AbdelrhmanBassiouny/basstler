@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from basstler.environment import GitVariable
-from basstler.git.commands import GitHubLoginLendingRunner
+from basstler.github.login_lending import GitHubLoginLendingRunner
 from basstler.github.repository import GitHubAddress
 
 from ..scratch_repository import ScratchRepository

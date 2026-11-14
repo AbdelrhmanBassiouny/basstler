@@ -23,7 +23,7 @@ import basstler.upstream_reviews.action.read
 import basstler.upstream_reviews.action.run
 from basstler.environment import GitVariable
 from basstler.git.commands import GitCommandRunner
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.client import GitHubReader
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
@@ -325,9 +325,11 @@ class Fork:
     remote: Path
 
     @property
-    def branch(self) -> RemoteBranch:
+    def branch(self) -> GitHubRemoteBranch:
         """:return: The Action branch on the fork."""
-        return RemoteBranch(ActionBranch.NAME, GitCommandRunner(self.clone), "origin")
+        return GitHubRemoteBranch(
+            ActionBranch.NAME, GitCommandRunner(self.clone), "origin"
+        )
 
     def files(self) -> dict[str, str]:
         """:return: Every file on the remote's Action branch, by path, without its
@@ -340,9 +342,11 @@ class Fork:
             for name in names
         }
 
-    def request_branch(self, identifier: str = REQUEST_IDENTIFIER) -> RemoteBranch:
+    def request_branch(
+        self, identifier: str = REQUEST_IDENTIFIER
+    ) -> GitHubRemoteBranch:
         """:return: The branch of the request with *identifier*."""
-        return RemoteBranch(
+        return GitHubRemoteBranch(
             ActionBranch.for_request(identifier), GitCommandRunner(self.clone), "origin"
         )
 

@@ -9,6 +9,7 @@ import pytest
 
 from basstler.plan.dependencies import (
     DependencyReference,
+    DependencyResolver,
     PlanDirectory,
     UnresolvedDependency,
 )
@@ -21,6 +22,12 @@ from ..fixture_plans import (
     fixture_manifest,
     fixture_repository,
     foreign_reference,
+)
+from ..plan_site.first_plan import (
+    ELSEWHERE_PULL_REQUEST,
+    FIRST_PLAN,
+    MERGED_PULL_REQUEST,
+    OPEN_PULL_REQUEST,
 )
 
 # %% cross-plan references - parsing
@@ -118,3 +125,17 @@ def test_plan_directory_does_not_resolve_an_unknown_reference(text: str):
     assert resolved == UnresolvedDependency(
         reference=DependencyReference.from_text(text)
     )
+
+
+# %% the pull requests a plan's items name
+
+
+def test_the_resolver_names_the_pull_request_of_every_item_that_has_one():
+    """
+    Each resolved item's pull request is named on the repository the item is opened on.
+    """
+    assert DependencyResolver(FIRST_PLAN).pull_request_references == [
+        MERGED_PULL_REQUEST,
+        OPEN_PULL_REQUEST,
+        ELSEWHERE_PULL_REQUEST,
+    ]

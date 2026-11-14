@@ -46,7 +46,7 @@ from cyclopts import App, Parameter, Token
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.git.commands import GitCommandRunner
-from basstler.git.commit_move import (
+from basstler.stack.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,

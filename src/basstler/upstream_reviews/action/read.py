@@ -9,7 +9,7 @@ import json
 import time
 from dataclasses import dataclass
 
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.client import GitHubReader
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github.run_listing import RunListing
@@ -41,7 +41,7 @@ class ActionRead[AnswerType: ActionAnswer]:
     One read through the fork's Action: request it, then wait for its answer.
     """
 
-    branch: RemoteBranch
+    branch: GitHubRemoteBranch
     """
     The fork's Action branch, which every request's branch starts from.
     """
@@ -73,11 +73,11 @@ class ActionRead[AnswerType: ActionAnswer]:
     """
 
     @property
-    def request_branch(self) -> RemoteBranch:
+    def request_branch(self) -> GitHubRemoteBranch:
         """
         :return: The branch carrying this request and, once its run answers, its result.
         """
-        return RemoteBranch(
+        return GitHubRemoteBranch(
             ActionBranch.for_request(self.request.identifier),
             self.branch.git,
             self.branch.remote,

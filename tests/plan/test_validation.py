@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.exceptions import (
+from basstler.plan.exceptions import (
     DependencyCycle,
     DuplicateItemId,
     InvalidBlockers,

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.hub_page import CountedItem, PlanSummary, StageShare
-from basstler.plan_site.plan import Plan, ProgressStage
+from basstler.plan.structure import Plan, ProgressStage
 
 from ..manifest_builders import minimal_plan
 

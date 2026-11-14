@@ -35,7 +35,7 @@ from typing import Any
 
 import yaml
 
-from basstler.exceptions import PlanValidationError
+from basstler.plan.exceptions import PlanValidationError
 from basstler.github.pull_request_source import (
     GitHubPullRequestSource,
     PullRequestSource,
@@ -60,7 +60,7 @@ from basstler.plan_site.hub_page import (
     SkippedPage,
 )
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.standard_streams import StandardStreamHandler
@@ -371,7 +371,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
         live_pull_requests = self.pull_request_source.live_pull_requests_of(
-            dependencies
+            dependencies.pull_request_references
         )
         for repository, failure in live_pull_requests.read_failures.items():
             logger.warning(

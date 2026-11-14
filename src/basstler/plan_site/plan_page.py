@@ -5,7 +5,7 @@ next steps its live pull-request state calls for.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from basstler.class_property import classproperty
@@ -14,9 +14,9 @@ from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
 from basstler.plan.repository_rules import RepositoryRules
-from basstler.plan_site.cards import ModelOption, TrackSection, WaveSection
+from basstler.plan_site.cards import ItemCard, ModelOption, TrackSection, WaveSection
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary
@@ -39,6 +39,11 @@ class RenderedPlanPage:
     overview: PlanOverview
     """
     The plan's state the page was rendered from.
+    """
+
+    cards_by_identifier: Mapping[str, ItemCard]
+    """
+    The card the page shows for each item, by item id.
     """
 
 
@@ -114,7 +119,7 @@ class PlanPage(TemplatePage):
         """
         :return: The rendered page, and the plan's state it shows.
         """
-        ItemClassifier(
+        cards_by_identifier = ItemClassifier(
             plan=self.plan,
             live_pull_requests=self.live_pull_requests,
             dependencies=self.dependencies,
@@ -139,9 +144,12 @@ class PlanPage(TemplatePage):
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             repository_rules=self.repository_rules.rules,
             waves=self._wave_sections(),
+            cards_by_identifier=cards_by_identifier,
             available_models=list(ModelOption),
         )
-        return RenderedPlanPage(html=html, overview=overview)
+        return RenderedPlanPage(
+            html=html, overview=overview, cards_by_identifier=cards_by_identifier
+        )
 
     def _wave_sections(self) -> list[WaveSection]:
         """

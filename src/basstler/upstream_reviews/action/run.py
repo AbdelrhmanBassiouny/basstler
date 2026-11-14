@@ -11,7 +11,7 @@ from pathlib import Path
 from basstler.git.commands import GitCommandRunner
 from basstler.git.remote_branch import RemoteBranch
 from basstler.github.repository_access import GitHubRepository
-from basstler.maintenance.upstream_action import (
+from basstler.upstream_reviews.action.open_pull_requests import (
     OpenPullRequestsAnswer,
     OpenPullRequestsRequest,
 )

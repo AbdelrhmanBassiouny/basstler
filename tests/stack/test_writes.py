@@ -9,7 +9,7 @@ from collections.abc import Container
 
 import pytest
 
-from basstler.git.commit_move import (
+from basstler.stack.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,

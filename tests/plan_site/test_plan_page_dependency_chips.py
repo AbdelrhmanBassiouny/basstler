@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from basstler.github.pull_request_state import LivePullRequests
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Item, Plan, Track, Wave
+from basstler.plan.structure import Item, Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 
 from ..fixture_plans import (
@@ -58,45 +58,60 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
 
 
 def test_dependency_chip_falls_back_to_the_raw_identifier_when_unresolved():
+    """
+    An unresolved dependency's chip shows the entry's own text.
+    """
     renderer = make_renderer([item("a", ItemStatus.NOT_STARTED, depends_on=["ghost"])])
-    renderer.render()
-    chip = renderer.plan.items[0].dependency_chips[0]
+    page = renderer.render()
+    chip = page.cards_by_identifier["a"].dependency_chips[0]
     assert chip.dependency.reference.text == "ghost"
     assert chip.tooltip == "ghost"
 
 
 def test_dependency_chip_is_not_ready_when_the_dependency_has_not_started():
+    """
+    A dependency that has not started is not ready.
+    """
     renderer = make_renderer(
         [
             item("a", ItemStatus.NOT_STARTED),
             item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ]
     )
-    renderer.render()
-    chip = renderer.plan.items_by_identifier["b"].dependency_chips[0]
+    page = renderer.render()
+    chip = page.cards_by_identifier["b"].dependency_chips[0]
     assert chip.dependency.is_ready_to_unblock_dependents() is False
 
 
 def test_dependency_chip_is_ready_when_the_dependency_is_done():
+    """
+    A done dependency is ready.
+    """
     renderer = make_renderer(
         [
             item("a", ItemStatus.DONE),
             item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ]
     )
-    renderer.render()
-    chip = renderer.plan.items_by_identifier["b"].dependency_chips[0]
+    page = renderer.render()
+    chip = page.cards_by_identifier["b"].dependency_chips[0]
     assert chip.dependency.is_ready_to_unblock_dependents() is True
 
 
 def test_dependency_chip_is_not_ready_when_unresolved():
+    """
+    An unresolved dependency is never ready.
+    """
     renderer = make_renderer([item("a", ItemStatus.NOT_STARTED, depends_on=["ghost"])])
-    renderer.render()
-    chip = renderer.plan.items[0].dependency_chips[0]
+    page = renderer.render()
+    chip = page.cards_by_identifier["a"].dependency_chips[0]
     assert chip.dependency.is_ready_to_unblock_dependents() is False
 
 
 def test_render_marks_an_unmet_dependency_chip_with_the_chip_unmet_class():
+    """
+    A chip whose dependency is not ready renders with the unmet class.
+    """
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,
         title="Test Plan",

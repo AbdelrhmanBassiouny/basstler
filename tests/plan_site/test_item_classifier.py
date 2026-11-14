@@ -13,7 +13,7 @@ from basstler.github.pull_request_source import READ_ACCESS_STATUSES
 from basstler.github.pull_request_state import LivePullRequests, LiveState
 from basstler.plan_site.__main__ import PlanSource
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 from basstler.plan_site.plan_page import PlanPage
 from basstler.plan_site.workflows import PlanSiteSecret
 
