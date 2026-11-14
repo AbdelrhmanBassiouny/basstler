@@ -15,6 +15,11 @@ on:
         description: "The owner/name repository the pull request is opened on"
         required: true
         type: string
+  # Every pull request opened or updated here, since GitHub clears "Viewed" from a file
+  # that changes again. pull_request_target hands the secret to pull requests from
+  # forks too; the run reads their commits but runs none of their code.
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
 
 concurrency:
   group: mark-viewed-${{ inputs.pull_request || github.event.pull_request.number }}

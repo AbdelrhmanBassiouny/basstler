@@ -230,12 +230,18 @@ def test_unreadable_actions_settings_are_never_changed_or_called_off():
     ]
 
 
-def test_basstler_s_own_caller_is_the_one_the_setup_installs():
+def test_basstler_s_own_caller_marks_every_pull_request():
     """
-    Basstler's own repository marks files viewed with the workflow the setup writes.
+    Basstler's own repository marks files viewed on every pull request with the workflow
+    the setup writes.
     """
     installed = (RepositoryLocation.ROOT / WorkflowLocation.MARK_VIEWED).read_text()
-    assert installed == MarkViewedSetup(BASSTLER_REPOSITORY).caller_workflow
+    assert (
+        installed
+        == MarkViewedSetup(
+            BASSTLER_REPOSITORY, on_every_pull_request=True
+        ).caller_workflow
+    )
 
 
 # %% every pull request
