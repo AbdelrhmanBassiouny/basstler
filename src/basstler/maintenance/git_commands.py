@@ -28,6 +28,11 @@ from basstler.stack.settings import Configuration
 
 # %% running git
 
+GIT_TEXT_ENCODING = "utf-8"
+"""
+The encoding git's output and the files it commits are read and written in.
+"""
+
 
 @dataclass
 class GitCommandFailed(CommandFailure, ExternalCallFailed):
@@ -181,7 +186,7 @@ class GitCommandRunner:
             ["git", *arguments],
             cwd=self.working_directory,
             capture_output=True,
-            text=True,
+            encoding=GIT_TEXT_ENCODING,
             env={**os.environ, **(environment or {})},
         )
         return GitCommandResult(
@@ -299,7 +304,7 @@ class GitCommandRunner:
             self.run("read-tree", parent or "--empty", environment=index)
             blob_file = Path(scratch) / CommitScratchFile.BLOB
             for path, text in files.items():
-                blob_file.write_text(text + "\n")
+                blob_file.write_bytes(f"{text}\n".encode(GIT_TEXT_ENCODING))
                 blob = self.run("hash-object", "-w", str(blob_file))
                 self.run(
                     "update-index",
