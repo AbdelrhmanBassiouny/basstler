@@ -16,7 +16,7 @@ from basstler.plan.model import ItemStatus
 from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan_site.cards import ItemCard, ModelOption, TrackSection, WaveSection
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary

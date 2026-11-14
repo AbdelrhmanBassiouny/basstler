@@ -12,7 +12,7 @@ from basstler.github.pull_request_state import (
 )
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ModelOption
-from basstler.plan_site.plan import Plan, Track, Wave
+from basstler.plan.structure import Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 
 from ..fixture_plans import (

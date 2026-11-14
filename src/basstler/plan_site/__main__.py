@@ -60,7 +60,7 @@ from basstler.plan_site.hub_page import (
     SkippedPage,
 )
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.standard_streams import StandardStreamHandler

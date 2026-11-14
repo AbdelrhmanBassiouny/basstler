@@ -19,7 +19,7 @@ from basstler.github.pull_request_record import (
 from basstler.github.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.plan_site.__main__ import PlanSource, RepositorySite, SiteFile
 from basstler.plan_site.cards import DraftRecheckAttribute, StartNowAction
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 
 from ..constants.site import SitePlan, SiteSampleText
 from ..github.pull_request_api import api_pull_request

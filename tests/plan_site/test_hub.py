@@ -24,7 +24,7 @@ from basstler.plan_site.hub import (
     SiteAddress,
     main,
 )
-from basstler.plan_site.plan import Item
+from basstler.plan.structure import Item
 from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.setup.steps import PersonalNotesSetting
 

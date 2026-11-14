@@ -18,7 +18,7 @@ from basstler.plan.dependencies import UnresolvedDependency
 if TYPE_CHECKING:
     from basstler.github.repository import PullRequestReference
     from basstler.plan.dependencies import Dependency, ResolvedDependency
-    from basstler.plan_site.plan import Item, Track, Wave
+    from basstler.plan.structure import Item, Track, Wave
 
 
 # %% dependency chips

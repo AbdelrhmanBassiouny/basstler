@@ -23,7 +23,7 @@ from basstler.plan_site.cards import (
     ResolveAction,
     StartNowAction,
 )
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 from basstler.plan_site.workflows import PlanSiteSecret
 
 # %% the classifier

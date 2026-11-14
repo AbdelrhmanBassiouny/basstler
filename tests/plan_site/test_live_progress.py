@@ -35,7 +35,7 @@ from basstler.plan_site.hub_page import (
     StageShare,
 )
 from basstler.plan_site.live_state_display import LiveStateDisplay
-from basstler.plan_site.plan import ProgressStage
+from basstler.plan.structure import ProgressStage
 from basstler.render_common import TemplatePage
 
 from ..constants.site import SitePlan, SiteSampleText

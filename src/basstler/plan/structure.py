@@ -1,6 +1,6 @@
 """
-A plan.yaml as its page on the plan site reads it: its waves, tracks and items, each
-item carrying the live state the renderer fills in.
+A plan.yaml read as its waves, tracks and items, each item carrying the live state its
+pull request is classified into.
 """
 
 from __future__ import annotations

@@ -24,7 +24,7 @@ from basstler.plan.check_dependency_readiness import (
 )
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.plan_site.plan import Item, Plan, Track, Wave
+from basstler.plan.structure import Item, Plan, Track, Wave
 
 from ..constants.paths import DatasetLocation
 from ..fixture_plans import (

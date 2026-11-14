@@ -16,7 +16,7 @@ from basstler.class_property import classproperty
 from basstler.github.pull_request_state import LivePullRequests, LiveState
 from basstler.github.repository import PullRequestReference, Repository
 from basstler.plan.model import PlanDocument, PlanManifest
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 
 # %% references
 

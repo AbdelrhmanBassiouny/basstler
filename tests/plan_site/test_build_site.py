@@ -37,7 +37,7 @@ from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText

@@ -32,7 +32,7 @@ from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.repository_rules_store import RepositoryRulesStore
 from basstler.plan.size_limits import Roadmap
 from basstler.plan.validation import PlanValidator
-from basstler.plan_site.plan import Plan
+from basstler.plan.structure import Plan
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

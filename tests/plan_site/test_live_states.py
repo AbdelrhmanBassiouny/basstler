@@ -28,7 +28,7 @@ from basstler.plan_site.cards import (
     RefreshSource,
 )
 from basstler.plan_site.chip_tone import ChipTone
-from basstler.plan_site.plan import Item
+from basstler.plan.structure import Item
 
 from ..constants.site import SitePlan, SiteSampleText
 from ..github.pull_request_api import api_pull_request

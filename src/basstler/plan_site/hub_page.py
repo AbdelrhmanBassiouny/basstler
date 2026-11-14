@@ -18,7 +18,7 @@ from basstler.github.repository import GitHubAddress
 from basstler.github.repository_access import ListingParameter, PullRequestListState
 from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Item, Plan, ProgressStage
+from basstler.plan.structure import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.render_common import TemplatePage
 

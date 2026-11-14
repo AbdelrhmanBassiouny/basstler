@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Item, Plan
+from basstler.plan.structure import Item, Plan
 
 # %% next steps
 
