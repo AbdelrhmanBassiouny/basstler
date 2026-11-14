@@ -20,8 +20,10 @@ from basstler.plan_site.theme import (
     AppearanceSettings,
     AppearanceStorageKey,
     BuiltInTheme,
+    ChipShape,
     Color,
     ColorScheme,
+    Frame,
     SiteAppearance,
     SiteTheme,
     SkippedTheme,
@@ -105,6 +107,18 @@ def test_an_ornament_that_could_end_a_css_rule_is_refused():
 def test_a_font_list_that_could_end_a_css_declaration_is_refused():
     with pytest.raises(pydantic.ValidationError):
         ThemeStyle.from_json({"body_font": "serif; color: red"})
+
+
+def test_a_frame_the_site_does_not_draw_is_refused():
+    with pytest.raises(pydantic.ValidationError):
+        ThemeStyle.from_json({"frame": "glass"})
+
+
+def test_a_theme_file_names_its_frame_and_chip_shape(readable_theme: SiteTheme):
+    assert (readable_theme.style.frame, readable_theme.style.chip_shape) == (
+        Frame.METAL,
+        ChipShape.NOTCHED,
+    )
 
 
 # %% the appearance a site is built with
@@ -195,6 +209,42 @@ def test_the_stylesheet_writes_a_theme_s_colours(readable_theme: SiteTheme):
 
     assert f'"{readable_theme.style.ornament}"' in stylesheet
     assert readable_theme.dark.text_muted in stylesheet
+
+
+def theme_declaration(theme: SiteTheme) -> str:
+    """
+    :param theme: A readable theme.
+    :return: The stylesheet's rule that declares the theme's style and light colours.
+    """
+    stylesheet = SiteStylesheet(
+        SiteAppearance(AppearanceSettings(themes=(theme,)))
+    ).render()
+    opening = f'[{AppearanceAttribute.THEME}="{theme.identifier}"] {{'
+    return stylesheet.split(opening, 1)[1].split("}", 1)[0]
+
+
+def test_every_frame_draws_its_own_shape(readable_theme: SiteTheme):
+    declarations = {
+        theme_declaration(
+            replace(readable_theme, style=replace(readable_theme.style, frame=frame))
+        )
+        for frame in Frame
+    }
+
+    assert len(declarations) == len(Frame)
+
+
+def test_every_chip_shape_draws_its_own_outline(readable_theme: SiteTheme):
+    declarations = {
+        theme_declaration(
+            replace(
+                readable_theme, style=replace(readable_theme.style, chip_shape=shape)
+            )
+        )
+        for shape in ChipShape
+    }
+
+    assert len(declarations) == len(ChipShape)
 
 
 @pytest.fixture

@@ -1,4 +1,4 @@
-# Elderwood: forest green and gold on parchment, book-face headings and a fleuron.
+# Elderwood: forest green and gold on parchment, book-face headings, carved double-ruled panels and a fleuron.
 title: Elderwood
 light:
   background: "#F5EEDC"
@@ -45,5 +45,8 @@ style:
   body_font: 'Georgia, "Times New Roman", serif'
   corner_radius: 4px
   small_corner_radius: 3px
+  border_width: 4px
+  frame: carved
+  chip_shape: rounded
   ornament: "❦"
   transition_duration: 220ms

@@ -43,3 +43,5 @@ dark:
   idle_tint: "#232D34"
 style:
   ornament: "~"
+  frame: metal
+  chip_shape: notched

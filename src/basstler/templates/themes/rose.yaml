@@ -1,4 +1,4 @@
-# Rosé: rose and plum, serif headings and soft corners.
+# Rosé: cushioned raised panels, rose and plum, serif headings and soft corners.
 title: Rosé
 light:
   background: "#FBF5F6"
@@ -44,5 +44,7 @@ style:
   heading_font: 'Georgia, "Times New Roman", serif'
   corner_radius: 16px
   small_corner_radius: 10px
+  frame: raised
+  chip_shape: pill
   ornament: "✿"
   transition_duration: 180ms

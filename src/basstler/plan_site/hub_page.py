@@ -22,7 +22,9 @@ from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.plan_site.site_page import SitePage
 from basstler.plan_site.theme import (
     AppearanceAttribute,
+    ChipShape,
     ColorScheme,
+    Frame,
     SiteAppearance,
     SkippedTheme,
 )
@@ -615,6 +617,8 @@ class SiteStylesheet(TemplatePage):
             appearance=self.appearance,
             attribute=AppearanceAttribute,
             scheme=ColorScheme,
+            frame=Frame,
+            chip_shape=ChipShape,
         )
 
 

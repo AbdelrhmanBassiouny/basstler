@@ -1,5 +1,5 @@
 """
-The plan site's themes: the colours, type, borders, ornament and motion a viewer picks
+The plan site's themes: the colours, type, frames, chip shapes, ornament and motion a viewer picks
 on the page, and the contrast every theme's text must reach before it is published.
 """
 
@@ -338,6 +338,68 @@ class Palette(ValidatedJSONModel):
         ]
 
 
+# %% shape
+
+
+class Frame(StrEnum):
+    """
+    The shape and depth of a theme's cards, panels, chips and buttons.
+
+    .. note:: A frame never changes a fill, so text keeps the contrast checked for it.
+    """
+
+    FLAT = "flat"
+    """
+    A thin flat border.
+    """
+
+    RAISED = "raised"
+    """
+    Cushioned panels with a soft shadow that lift on hover, and glossy chips.
+    """
+
+    BEVELED = "beveled"
+    """
+    Chiselled edges lit from the top left with a hard cast shadow, and bevelled chips.
+    """
+
+    CARVED = "carved"
+    """
+    Double-ruled, sunken panels and engraved chips.
+    """
+
+    METAL = "metal"
+    """
+    Square, riveted frames of polished metal in the accent colour, and embossed chips.
+    """
+
+
+class ChipShape(StrEnum):
+    """
+    The outline of a theme's chips.
+    """
+
+    PILL = "pill"
+    """
+    Fully rounded ends.
+    """
+
+    ROUNDED = "rounded"
+    """
+    The theme's small corner radius.
+    """
+
+    SQUARE = "square"
+    """
+    Square corners.
+    """
+
+    NOTCHED = "notched"
+    """
+    Corners cut off at an angle.
+    """
+
+
 class ThemeStyle(ValidatedJSONModel):
     """
     What a theme sets besides its colours.
@@ -385,6 +447,16 @@ class ThemeStyle(ValidatedJSONModel):
     ornament: Ornament = ""
     """
     The characters shown before every page's eyebrow.
+    """
+
+    frame: Frame = Frame.FLAT
+    """
+    The shape and depth of cards, panels, chips and buttons.
+    """
+
+    chip_shape: ChipShape = ChipShape.PILL
+    """
+    The outline of chips.
     """
 
     transition_duration: CSSDuration = "120ms"
@@ -466,17 +538,23 @@ class BuiltInTheme(PathEnumeration):
 
     ROSE = PackageLocation.TEMPLATES.value / "themes" / "rose.yaml"
     """
-    Rose and plum with serif headings and soft corners.
+    Rose and plum with serif headings and cushioned, raised panels.
     """
 
     FORGE = PackageLocation.TEMPLATES.value / "themes" / "forge.yaml"
     """
-    Ember on iron, with monospace headings, square corners and heavy borders.
+    Ember on iron, with monospace headings and chiselled, bevelled frames.
     """
 
     ELDERWOOD = PackageLocation.TEMPLATES.value / "themes" / "elderwood.yaml"
     """
-    Forest green and gold on parchment, with book-face headings and a fleuron.
+    Forest green and gold on parchment, with book-face headings, carved panels and a
+    fleuron.
+    """
+
+    CITADEL = PackageLocation.TEMPLATES.value / "themes" / "citadel.yaml"
+    """
+    Gold on night slate, with riveted metal frames, notched chips and carved capitals.
     """
 
     @property

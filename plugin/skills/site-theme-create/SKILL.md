@@ -22,6 +22,8 @@ dark: {the same keys}
 style:                         # optional, each key optional
   body_font / heading_font / monospace_font   # CSS font lists
   corner_radius / small_corner_radius / border_width   # px, rem or em
+  frame                        # flat, raised, beveled, carved (border_width >= 3px) or metal (riveted, accent-coloured; 5-6px)
+  chip_shape                   # pill, rounded, square or notched
   ornament                     # up to 4 characters before each page's eyebrow
   transition_duration          # ms or s
 ```

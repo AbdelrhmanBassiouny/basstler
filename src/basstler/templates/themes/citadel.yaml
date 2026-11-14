@@ -1,0 +1,49 @@
+# Citadel: gold on night slate, riveted metal frames, notched chips and carved capitals.
+title: Citadel
+light:
+  background: "#EFE8DA"
+  surface: "#FAF5EA"
+  surface_alternate: "#E3D8C3"
+  text: "#231A10"
+  text_muted: "#5A4A32"
+  border: "#BFA67A"
+  accent: "#9A6B12"
+  accent_strong: "#6E4A08"
+  accent_tint: "#F3E6C4"
+  good: "#2E6B2F"
+  good_tint: "#E1EED8"
+  warning: "#7A5000"
+  warning_tint: "#F5E8C3"
+  bad: "#9A2121"
+  bad_tint: "#F6DDD8"
+  info: "#24507F"
+  info_tint: "#DFE8F2"
+  idle: "#5B5243"
+  idle_tint: "#E9E2D4"
+dark:
+  background: "#0F1217"
+  surface: "#181C23"
+  surface_alternate: "#20252E"
+  text: "#EDE3CC"
+  text_muted: "#B0A487"
+  border: "#3A3F4A"
+  accent: "#C9962E"
+  accent_strong: "#E8BE5C"
+  accent_tint: "#2F2410"
+  good: "#8FD18A"
+  good_tint: "#15301A"
+  warning: "#F0B44C"
+  warning_tint: "#36280E"
+  bad: "#F08C7C"
+  bad_tint: "#3B1915"
+  info: "#8DB6E8"
+  info_tint: "#16253A"
+  idle: "#ABA390"
+  idle_tint: "#262A31"
+style:
+  heading_font: '"Cinzel", "Trajan Pro", "Palatino Linotype", Palatino, Georgia, serif'
+  border_width: 6px
+  frame: metal
+  chip_shape: notched
+  ornament: "⚜"
+  transition_duration: 160ms

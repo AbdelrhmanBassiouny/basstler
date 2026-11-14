@@ -25,6 +25,54 @@
     color-scheme: {{ scheme }};
 {% endmacro %}
 
+{% macro frame_tokens(theme_frame) %}
+{% if theme_frame == frame.RAISED %}
+    --frame-style: solid;
+    --frame-color: color-mix(in srgb, var(--border) 60%, transparent);
+    --frame-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px rgb(0 0 0 / 0.14);
+    --frame-lift: -2px;
+    --chip-depth: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 1px 2px rgb(0 0 0 / 0.2);
+{% elif theme_frame == frame.BEVELED %}
+    --frame-style: solid;
+    --frame-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+    --bevel-light: color-mix(in srgb, var(--border), white 45%);
+    --bevel-dark: color-mix(in srgb, var(--border), black 45%);
+    --frame-shadow: 4px 4px 0 rgb(0 0 0 / 0.35), inset 1px 1px 0 rgb(255 255 255 / 0.08);
+    --chip-depth: inset 1px 1px 0 rgb(255 255 255 / 0.4), inset -1px -1px 0 rgb(0 0 0 / 0.35);
+    --chip-rim: color-mix(in srgb, currentColor 40%, transparent);
+{% elif theme_frame == frame.CARVED %}
+    --frame-style: double;
+    --frame-color: color-mix(in srgb, var(--border), var(--text) 35%);
+    --frame-shadow: inset 0 2px 5px rgb(0 0 0 / 0.2), inset 0 -1px 0 rgb(255 255 255 / 0.25);
+    --chip-depth: inset 0 1px 2px rgb(0 0 0 / 0.35), 0 1px 0 rgb(255 255 255 / 0.3);
+{% elif theme_frame == frame.METAL %}
+    --radius: 0;
+    --radius-small: 0;
+    --metal-light: color-mix(in srgb, var(--accent), white 55%);
+    --metal-dark: color-mix(in srgb, var(--accent), black 50%);
+    --frame-color: var(--accent);
+    --frame-image: linear-gradient(135deg, var(--metal-light), var(--accent) 25%, var(--metal-dark) 50%, var(--accent) 75%, var(--metal-light));
+    --frame-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.45), 0 2px 0 rgb(0 0 0 / 0.35), 0 6px 14px rgb(0 0 0 / 0.3);
+    --rivet: radial-gradient(circle at 35% 35%, var(--metal-light), var(--accent) 40%, var(--metal-dark) 65%, transparent 70%);
+    --rivet-size: calc(2 * var(--border-width)) calc(2 * var(--border-width));
+    --frame-rivets: var(--rivet) left top / var(--rivet-size) no-repeat, var(--rivet) right top / var(--rivet-size) no-repeat, var(--rivet) left bottom / var(--rivet-size) no-repeat, var(--rivet) right bottom / var(--rivet-size) no-repeat;
+    --chip-depth: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.4);
+    --chip-rim: var(--metal-dark);
+{% endif %}
+{% endmacro %}
+
+{% macro chip_tokens(shape) %}
+{% if shape == chip_shape.ROUNDED %}
+    --chip-radius: var(--radius-small);
+{% elif shape == chip_shape.SQUARE %}
+    --chip-radius: 0;
+{% elif shape == chip_shape.NOTCHED %}
+    --chip-radius: 0;
+    --chip-clip: polygon(var(--notch) 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 calc(100% - var(--notch)), 0 var(--notch));
+    --notch: 0.4em;
+{% endif %}
+{% endmacro %}
+
 :root {
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -34,6 +82,18 @@
   --space-6: 2.5rem;
   --page-width: 1240px;
   --column-width: 19rem;
+  --status-width: 3px;
+  --frame-style: solid;
+  --frame-color: var(--border);
+  --frame-image: none;
+  --frame-shadow: 0 0 transparent;
+  --frame-rivets: none;
+  --frame-lift: 0;
+  --chip-radius: 999px;
+  --chip-clip: none;
+  --chip-depth: 0 0 transparent;
+  --chip-rim: transparent;
+  --chip-border-width: max(1px, calc(var(--border-width) / 3));
 }
 
 {% for theme in appearance.themes %}
@@ -48,7 +108,7 @@
     --border-width: {{ theme.style.border_width }};
     --ornament: {% if theme.style.ornament %}"{{ theme.style.ornament }}"{% else %}none{% endif %};
     --motion: {{ theme.style.transition_duration }};
-{{ palette_tokens(theme.light, scheme.LIGHT) }}}
+{{ chip_tokens(theme.style.chip_shape) }}{{ frame_tokens(theme.style.frame) }}{{ palette_tokens(theme.light, scheme.LIGHT) }}}
 @media (prefers-color-scheme: dark) {
   {{ selector }}:not([{{ attribute.SCHEME }}="{{ scheme.LIGHT }}"]) {
 {{ palette_tokens(theme.dark, scheme.DARK) }}  }
@@ -81,7 +141,8 @@ code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums;
 h1, h2, h3 { font-family: var(--font-heading); }
 .eyebrow::before { content: var(--ornament); margin-right: var(--space-2); }
 a, .chip, .progress-card, .action-button, .model-picker-toggle {
-  transition: color var(--motion), background-color var(--motion), border-color var(--motion);
+  transition: color var(--motion), background-color var(--motion), border-color var(--motion),
+    transform var(--motion), box-shadow var(--motion);
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
@@ -128,7 +189,6 @@ details > summary { cursor: pointer; color: var(--text-muted); font-size: 0.85re
   background: var(--surface); border: var(--border-width) solid var(--border); border-radius: var(--radius);
   padding: var(--space-4);
 }
-a.progress-card:hover, a.progress-card:focus-visible { border-color: var(--accent); }
 .progress-card.complete { opacity: 0.7; }
 .progress-card h2 { font-size: 1.02rem; margin: 0; overflow-wrap: anywhere; }
 .progress-card p { margin: 0; }
@@ -148,8 +208,9 @@ a.progress-card:hover, a.progress-card:focus-visible { border-color: var(--accen
 .chip {
   display: inline-flex; align-items: center; gap: var(--space-1);
   font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.4;
-  padding: 0.05rem 0.45rem; border-radius: 999px;
-  background: var(--idle-tint); color: var(--idle); border: var(--border-width) solid transparent;
+  padding: 0.05rem 0.45rem; border-radius: var(--chip-radius); clip-path: var(--chip-clip);
+  background: var(--idle-tint); color: var(--idle); border: var(--chip-border-width) solid var(--chip-rim);
+  box-shadow: var(--chip-depth);
   text-decoration: none; white-space: nowrap;
 }
 a.chip:hover { border-color: currentColor; }
@@ -198,16 +259,15 @@ a.chip:hover { border-color: currentColor; }
 .track-empty { color: var(--text-muted); font-size: 0.8rem; font-style: italic; margin: 0; }
 
 .item {
-  background: var(--surface); border: var(--border-width) solid var(--border); border-left: 3px solid var(--idle);
+  background: var(--surface); border: var(--border-width) solid var(--border); --status: var(--idle);
   border-radius: var(--radius-small); padding: var(--space-3);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
-.item.status-not_started { border-left-color: var(--border); }
-.item.status-done { border-left-color: var(--good); }
-.item.status-in_progress { border-left-color: var(--info); }
-.item.status-blocked { border-left-color: var(--bad); }
-.item.status-deferred { border-left-color: var(--border); opacity: 0.75; }
-.item.has-drift { box-shadow: inset 0 0 0 1px var(--warn); }
+.item.status-not_started { --status: var(--border); }
+.item.status-done { --status: var(--good); }
+.item.status-in_progress { --status: var(--info); }
+.item.status-blocked { --status: var(--bad); }
+.item.status-deferred { --status: var(--border); opacity: 0.75; }
 .item.item-highlighted { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hide-done .item.status-done { display: none; }
 .item h3 { font-size: 0.92rem; line-height: 1.35; margin: 0; }
@@ -234,6 +294,27 @@ a.chip:hover { border-color: currentColor; }
 .model-picker-list li:hover, .model-picker-option-selected { background: var(--accent-tint); }
 .action-button-copied { border-color: var(--good); color: var(--good); }
 .action-button-failed { border-color: var(--bad); color: var(--bad); }
+
+/* %% frames: each theme's shape and depth, set by its frame tokens */
+
+.progress-card, .item, .next-steps, .health, .status-strip .stat {
+  position: relative;
+  border-style: var(--frame-style); border-color: var(--frame-color);
+  border-image: var(--frame-image) 1;
+  box-shadow: var(--frame-shadow);
+}
+.health { border-color: var(--warn); }
+:is(.progress-card, .item, .next-steps, .health)::after {
+  content: ""; position: absolute; inset: calc(-1.5 * var(--border-width)); pointer-events: none;
+  background: var(--frame-rivets);
+}
+.item { box-shadow: inset var(--status-width) 0 0 var(--status), var(--frame-shadow); }
+.item.has-drift { box-shadow: inset var(--status-width) 0 0 var(--status), inset 0 0 0 1px var(--warn), var(--frame-shadow); }
+a.progress-card:hover, a.progress-card:focus-visible { border-color: var(--accent); transform: translateY(var(--frame-lift)); }
+.masthead, .site-footer { border-image: var(--frame-image) 1; }
+.action-button, .model-picker-toggle, .appearance-menu select, .status-strip .stat {
+  border-width: var(--chip-border-width); box-shadow: var(--chip-depth);
+}
 
 /* %% phone width */
 
