@@ -103,6 +103,10 @@ to read it.
 For a single piece of work rather than a whole plan, `/add-plan-item` runs that
 same decision on its own and is the lighter-weight way in.
 
+Give every item the `recommended_model` its difficulty calls for, as
+[`plan-schema.md`](plan-schema.md)'s "Choosing the recommended model" says: a design-heavy
+item gets a more capable model than a mechanical one.
+
 Write only what a future session needs to act, whether drafting fresh or
 migrating a source doc. Structured facts (branch, PR, status, blockers)
 become `plan.yaml` items, with each item's scope and binding decisions in its

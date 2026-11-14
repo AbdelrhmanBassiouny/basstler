@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from basstler.github.pull_request_state import LiveState, PullRequestRecord
 from basstler.github.repository import GitHubAddress, PullRequestReference
 from basstler.plan.model import ItemStatus, ManifestKey
+from basstler.plan.model_alias import ModelAlias
 from basstler.render_common import sanitize_http_url
 
 if TYPE_CHECKING:
@@ -164,6 +165,12 @@ class Item:
     session: str | None = None
     """
     A link to the session that produced this item, if any.
+    """
+
+    recommended_model: ModelAlias | None = None
+    """
+    The Claude model suited to this item's difficulty, or ``None`` when none was
+    recommended.
     """
 
     notes: str | None = None
@@ -328,6 +335,7 @@ class Item:
         called after :meth:`PlanValidator.validate` has already confirmed the data
         is well-formed."""
         notes = data.get(ManifestKey.NOTES.key)
+        recommended_model = data.get(ManifestKey.RECOMMENDED_MODEL.key)
         return cls(
             title=data[ManifestKey.TITLE.key],
             branch=data.get(ManifestKey.BRANCH.key),
@@ -337,6 +345,9 @@ class Item:
             pull_request_number=data.get(ManifestKey.PULL_REQUEST_NUMBER.key),
             repository=data.get(ManifestKey.REPOSITORY.key),
             session=sanitize_http_url(data.get(ManifestKey.SESSION.key)),
+            recommended_model=(
+                ModelAlias(recommended_model) if recommended_model else None
+            ),
             notes=notes.strip() if notes else None,
             depends_on=list(data.get(ManifestKey.DEPENDS_ON.key) or []),
             blockers=list(data.get(ManifestKey.BLOCKERS.key) or []),

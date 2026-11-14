@@ -5,15 +5,15 @@ how the page renders it.
 
 from __future__ import annotations
 
+import pytest
+
 from basstler.github.pull_request_state import (
     LivePullRequests,
     PullRequestRecord,
     PullRequestState,
 )
 from basstler.plan.model import ItemStatus
-from basstler.plan.item_mode import PlanItemSkill
-from basstler.plan.item_model import ModelAlias, RecommendedModels
-from basstler.plan_site.cards import ResolveAction, StartNowAction
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan_site.plan import Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 
@@ -209,9 +209,7 @@ def test_render_omits_action_button_for_a_done_item():
     assert 'data-action-command="' not in output
 
 
-def render_not_started_item_page(
-    recommended_models: RecommendedModels | None = None,
-) -> str:
+def render_item_page(*items) -> str:
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
@@ -219,39 +217,34 @@ def render_not_started_item_page(
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", ItemStatus.NOT_STARTED)],
+        items=list(items),
     )
-    arguments = {"recommended_models": recommended_models} if recommended_models else {}
     return (
         PlanPage(
             stylesheet_url=STYLESHEET_URL,
             plan=plan,
             roadmap_text="",
             live_pull_requests=LivePullRequests(),
-            **arguments,
         )
         .render()
         .html
     )
 
 
-def test_each_action_kind_routes_to_the_skill_its_recommendation_is_keyed_by():
-    assert StartNowAction.skill == PlanItemSkill.KICKOFF
-    assert ResolveAction.skill == PlanItemSkill.RESOLVE
-
-
-def test_render_offers_every_model_alias_in_each_action_buttons_dropdown():
-    output = render_not_started_item_page()
+def test_render_offers_every_model_alias_and_no_session_default_in_the_dropdown():
+    output = render_item_page(item("a", ItemStatus.NOT_STARTED))
     for alias in ModelAlias:
         assert f'data-value="{alias.value}"' in output
         assert f">{alias.label}</li>" in output
     assert 'data-value=""' not in output
+    assert 'class="model-picker-toggle"' in output
+    assert 'class="model-select"' not in output
 
 
-def test_render_preselects_the_recommended_alias_of_the_action():
-    recommended = RecommendedModels.layered(personal_text=None)
-    alias = recommended.of_skill(StartNowAction.skill)
-    output = render_not_started_item_page(recommended)
+@pytest.mark.parametrize("status", [ItemStatus.NOT_STARTED, ItemStatus.IN_PROGRESS])
+def test_render_preselects_the_items_recommended_model_on_its_action_button(status):
+    alias = ModelAlias.OPUS
+    output = render_item_page(item("a", status, recommended_model=alias))
     assert f'<span class="model-picker" data-model="{alias.value}"' in output
     assert f"{alias.label} ▾</button>" in output
     assert (
@@ -260,10 +253,7 @@ def test_render_preselects_the_recommended_alias_of_the_action():
     ) in output
 
 
-def test_render_preselects_a_personal_override_over_the_committed_alias():
-    override = ModelAlias.HAIKU
-    recommended = RecommendedModels.layered(
-        personal_text=f'{StartNowAction.skill.model_setting_key} = "{override}"\n'
-    )
-    output = render_not_started_item_page(recommended)
-    assert f'<span class="model-picker" data-model="{override.value}"' in output
+def test_render_preselects_no_model_for_an_item_with_no_recommendation():
+    output = render_item_page(item("a", ItemStatus.NOT_STARTED))
+    assert '<span class="model-picker" data-model=""' in output
+    assert "model-picker-option-selected" not in output

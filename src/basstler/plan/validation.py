@@ -28,6 +28,7 @@ from basstler.exceptions import (
     SharedBranch,
     UnknownDependency,
     UnknownDependencyPlan,
+    UnknownRecommendedModel,
     UnknownStatus,
     UnknownTrack,
     UnknownWave,
@@ -40,6 +41,7 @@ from basstler.plan.dependencies import (
     ResolvedDependency,
 )
 from basstler.plan.model import ItemStatus, ManifestKey
+from basstler.plan.model_alias import ModelAlias
 
 # %% dependency cycles
 
@@ -400,6 +402,9 @@ class PlanValidator:
             problems.append(
                 UnknownStatus(item_identifier, item.get(ManifestKey.STATUS.key))
             )
+        recommended_model = item.get(ManifestKey.RECOMMENDED_MODEL.key)
+        if recommended_model is not None and recommended_model not in list(ModelAlias):
+            problems.append(UnknownRecommendedModel(item_identifier, recommended_model))
         depends_on = item.get(ManifestKey.DEPENDS_ON.key)
         if depends_on is not None and not isinstance(depends_on, list):
             problems.append(InvalidDependsOn(item_identifier, type(depends_on)))

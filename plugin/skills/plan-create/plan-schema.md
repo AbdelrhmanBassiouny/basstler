@@ -80,6 +80,8 @@ items:                         # the actual trackable units of work - flat,
                                    # an item of this plan, <plan-id>/<item-id> for
                                    # one in another plan (see below)
     status: not started | in progress | blocked | deferred | done  # underscores (not_started) still read
+    recommended_model: opus | sonnet | haiku  # optional: the Claude Code alias suited to the item's
+                                               # difficulty; see "Choosing the recommended model"
     session: <url or omitted>
     notes: "short, freeform"
     blockers: ["freeform reasons", ...]   # optional, defaults to []
@@ -89,6 +91,20 @@ Validation is not documentation-only: `plan/validation.py` enforces this
 schema on every plan site build and every `save-plan.sh`, and `/plan-create` drafts against the
 same checks. If this document and that module ever disagree, the module is
 the authority.
+
+### Choosing the recommended model
+
+The skill that creates an item sets its `recommended_model` from how hard the task is,
+and the plan site preselects it on the item's action buttons. The values are the Claude
+Code aliases, which always resolve to the newest model of the family:
+
+- `haiku` - mechanical, well-specified edits that follow a pattern already in the code.
+- `sonnet` - ordinary implementation: a feature or fix whose design the item's `notes`
+  already settle.
+- `opus` - design-heavy, cross-cutting or ambiguous work, where the item must decide how
+  something should be built.
+
+An item without the field has no preselected model.
 
 ### Why `status` is deliberately thin
 

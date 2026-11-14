@@ -14,7 +14,7 @@ from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
 from basstler.plan.repository_rules import RepositoryRules
-from basstler.plan.item_model import ModelAlias, RecommendedModels
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan_site.cards import TrackSection, WaveSection
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Item, Plan
@@ -86,13 +86,6 @@ class PlanPage(TemplatePage):
     The links and dates the top of the page shows.
     """
 
-    recommended_models: RecommendedModels = field(
-        default_factory=lambda: RecommendedModels.layered(personal_text=None)
-    )
-    """
-    The model each action button preselects.
-    """
-
     plan_directory: PlanDirectory | None = None
     """
     The other plans this plan's ``depends_on`` entries may name, if any were loaded.
@@ -148,7 +141,6 @@ class PlanPage(TemplatePage):
             repository_rules=self.repository_rules.rules,
             waves=self._wave_sections(),
             available_models=list(ModelAlias),
-            recommended_models=self.recommended_models,
         )
         return RenderedPlanPage(html=html, overview=overview)
 

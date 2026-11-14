@@ -369,6 +369,29 @@ class UnknownStatus(ValidationProblem):
 
 
 @dataclass
+class UnknownRecommendedModel(ValidationProblem):
+    """
+    An item's ``recommended_model`` isn't one of :class:`ModelAlias`'s values.
+    """
+
+    item_identifier: str
+    """
+    The offending item's effective id.
+    """
+
+    recommended_model: Any
+    """
+    Whatever ``recommended_model`` actually held.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"item {self.item_identifier!r} has unknown recommended_model "
+            f"{self.recommended_model!r}"
+        )
+
+
+@dataclass
 class InvalidDependsOn(ValidationProblem):
     """
     An item's ``depends_on`` isn't a list.

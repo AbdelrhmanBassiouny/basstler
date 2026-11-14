@@ -43,7 +43,6 @@ from basstler.github.pull_request_source import (
 from basstler.github.repository import GitHubAddress, Repository
 from basstler.locations import ProjectLocation
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
-from basstler.plan.item_model import RecommendedModels
 from basstler.plan.model import PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.validation import PlanValidator
@@ -385,9 +384,6 @@ class RepositorySite(SiteSection[RepositorySummary]):
             roadmap_text=source.roadmap_text,
             repository_rules=self.repository_rules,
             live_pull_requests=live_pull_requests,
-            recommended_models=RecommendedModels.layered(
-                self.notes.read(ProjectLocation.PERSONAL_PLAN_ITEM_MODELS)
-            ),
             header=PlanPageHeader(
                 tracking_url=self.tracking_url_of(plan),
                 hub_url=self.address.hub_url,

@@ -1,6 +1,6 @@
 """
 What an item card and its sections show beyond the item itself: its dependency chips, its
-action button and its model picker, and the track and wave sections it sits in.
+action button and model dropdown, and the track and wave sections it sits in.
 """
 
 from __future__ import annotations
@@ -12,9 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
-from basstler.github.repository import Repository
-from basstler.plan.item_mode import PlanItemSkill
-from basstler.stack.promotability import PromotionBlocker
+from basstler.plan.model_alias import ModelAlias
 
 if TYPE_CHECKING:
     from basstler.github.repository import PullRequestReference
@@ -225,19 +223,22 @@ class ItemAction(ABC):
     item_identifier: str
     """The item this action's command targets."""
 
+    recommended_model: ModelAlias | None = None
+    """The model the button's picker preselects, or ``None`` to preselect none."""
+
     @classproperty
     @abstractmethod
-    def skill(cls) -> PlanItemSkill:
-        """The skill this action invokes - fixed per subclass, since which
-        skill an action routes to never varies per instance (only
-        :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"`` for the same
-        :class:`ResolveAction`)."""
+    def skill_command_name(cls) -> str:
+        """The ``/plan-item-...`` skill this action invokes - fixed per
+        subclass, since which skill an action routes to never varies per
+        instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
+        for the same :class:`ResolveAction`)."""
 
     @property
     def command(self) -> str:
         """The full command copied to the clipboard when the button is
         clicked."""
-        return f"/plan-item-{self.skill} {self.plan_id} {self.item_identifier}"
+        return f"{self.skill_command_name} {self.plan_id} {self.item_identifier}"
 
 
 @dataclass(frozen=True)
@@ -246,9 +247,9 @@ class StartNowAction(ItemAction):
     ``plan-item-kickoff``."""
 
     @classproperty
-    def skill(cls) -> PlanItemSkill:
+    def skill_command_name(cls) -> str:
         """:return: The ``plan-item-kickoff`` skill."""
-        return PlanItemSkill.KICKOFF
+        return "/plan-item-kickoff"
 
 
 @dataclass(frozen=True)
@@ -258,49 +259,9 @@ class ResolveAction(ItemAction):
     which of those three it actually is."""
 
     @classproperty
-    def skill(cls) -> PlanItemSkill:
+    def skill_command_name(cls) -> str:
         """:return: The ``plan-item-resolve`` skill."""
-        return PlanItemSkill.RESOLVE
-
-
-# %% promotion button
-
-
-@dataclass(frozen=True)
-class PromotionButton:
-    """
-    The button on an item's card that opens its pull request's prefilled form on the
-    upstream, or says why it cannot.
-    """
-
-    upstream_repository: Repository
-    """
-    The repository the pull request would be opened in.
-    """
-
-    url: str | None
-    """
-    The compare-and-create page, ``None`` while something blocks the promotion.
-    """
-
-    blockers: list[PromotionBlocker]
-    """
-    Every reason the pull request may not be promoted yet.
-    """
-
-    @property
-    def label(self) -> str:
-        """
-        :return: The button's text.
-        """
-        return "Contribute"
-
-    @property
-    def reason(self) -> str:
-        """
-        :return: Why the button is disabled, empty when it is not.
-        """
-        return "; ".join(blocker.value for blocker in self.blockers)
+        return "/plan-item-resolve"
 
 
 # %% track and wave sections

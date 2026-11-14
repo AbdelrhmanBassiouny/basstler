@@ -18,6 +18,7 @@ from basstler.plan.item_bootstrap.opening import WorkOpener, WorkOpenRequest
 from basstler.plan.item_bootstrap.record import ItemRecordRequest
 from basstler.plan.item_bootstrap.report import BootstrapReport, OperationReport
 from basstler.plan.item_bootstrap.update import ItemUpdateRequest
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
@@ -75,6 +76,7 @@ class RecordCommand(BootstrapCommand):
         parser.add_argument("--roadmap-entry")
         parser.add_argument("--title")
         parser.add_argument("--track")
+        parser.add_argument("--recommended-model", type=ModelAlias)
 
     def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
         return ItemRecordRequest(
@@ -84,6 +86,7 @@ class RecordCommand(BootstrapCommand):
             roadmap_entry=arguments.roadmap_entry,
             title=arguments.title,
             track=arguments.track,
+            recommended_model=arguments.recommended_model,
         ).record(project_root)
 
 
@@ -155,6 +158,7 @@ class UpdateCommand(BootstrapCommand):
         parser.add_argument("--branch")
         parser.add_argument("--pull-request-number", type=int)
         parser.add_argument("--session")
+        parser.add_argument("--recommended-model", type=ModelAlias)
         notes = parser.add_mutually_exclusive_group()
         notes.add_argument(
             "--notes", type=Path, help="A file whose text becomes the item's notes"
@@ -179,6 +183,7 @@ class UpdateCommand(BootstrapCommand):
                 (ManifestKey.BRANCH, arguments.branch),
                 (ManifestKey.PULL_REQUEST_NUMBER, arguments.pull_request_number),
                 (ManifestKey.SESSION, arguments.session),
+                (ManifestKey.RECOMMENDED_MODEL, arguments.recommended_model),
             )
             if value is not None
         }

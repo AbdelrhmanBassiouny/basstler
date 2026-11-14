@@ -150,13 +150,6 @@ class PlanItemSkill(StrEnum):
         """
         return f"{self.value}_mode"
 
-    @property
-    def model_setting_key(self) -> str:
-        """
-        The key this skill's recommended model is stored under, in both settings files.
-        """
-        return f"{self.value}_model"
-
 
 class CommandLineOption(StrEnum):
     """

@@ -12,6 +12,7 @@ from basstler.github.pull_request_state import (
 )
 from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus, ManifestKey
+from basstler.plan.model_alias import ModelAlias
 from basstler.plan_site.plan import Item, Plan
 
 from ..manifest_builders import manifest_item, minimal_plan
@@ -30,6 +31,16 @@ def test_item_from_mapping_accepts_an_item_with_no_branch():
     item_instance = Item.from_mapping(manifest_item("a", branch=None))
     assert item_instance.branch is None
     assert item_instance.identifier == "a"
+
+
+@pytest.mark.parametrize("alias", list(ModelAlias))
+def test_item_from_mapping_reads_the_recommended_model(alias: ModelAlias):
+    item_instance = Item.from_mapping(manifest_item("a", recommended_model=alias.value))
+    assert item_instance.recommended_model is alias
+
+
+def test_item_from_mapping_has_no_recommended_model_unless_the_manifest_names_one():
+    assert Item.from_mapping(manifest_item("a")).recommended_model is None
 
 
 # %% Item - precomputed template values
