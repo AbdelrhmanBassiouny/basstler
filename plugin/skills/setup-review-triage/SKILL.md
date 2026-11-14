@@ -82,6 +82,14 @@ Relay its *Left to you* section as it printed it, with every link and command:
   workflow, or, where it may not push, links the new-file page with it filled in.
   Relay the link; the user reviews and merges it.
 
+**One token with the plan site:** when the user publishes a plan site whose repository
+has the same owner as the pull requests' repository, offer one token for both instead.
+Re-run `/setup-personal-notes`'s publication command with
+`--mark-viewed-on <owner>/<name>`, naming the pull requests' repository. It then sets
+this workflow up too and asks for one token, stored as both secrets with one command.
+Relay its mark-viewed part as above. Where the owners differ, one fine-grained token
+cannot do both, so each keeps its own.
+
 Once the user says they took the steps, run the setup again and report what it says
 now, not what you expect. Call the route set up only when nothing is left.
 
