@@ -84,7 +84,7 @@ siteRecheckWhenShown(siteRecountProgress);
 {% macro promotion_button(promotion) %}
 {% if promotion %}
 {% if promotion.url %}
-<a class="promote-button" href="{{ promotion.url }}" target="_blank" rel="noopener">{{ promotion.label }} ↗</a>
+<a class="promote-button" href="{{ promotion.url }}" target="_blank" rel="noopener" title="Open a pull request on {{ promotion.upstream_repository }}">{{ promotion.label }} ↗</a>
 {% else %}
 <span class="promote-button promote-button-disabled" aria-disabled="true" title="{{ promotion.reason }}">{{ promotion.label }} ↗</span>
 {% endif %}
