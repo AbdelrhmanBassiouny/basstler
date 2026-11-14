@@ -34,6 +34,6 @@ items:
   session: https://claude.ai/code/session_01JxHGiQ6QwrU1DCxnD3WaYc
   pull_request_number: 214
   notes: 'Draft #214, stacked on #213: signature-checked keyword-argument judgment (tree
-    matcher with rules and findings, callee resolution through the class hierarchy) and a
-    module-move rename source. CRAM #967: 115 of 154 files mechanical in 12 s. Calls on
-    other objects attributes stay in review.'
+    matcher with rules and findings; calls resolved by name, through the class hierarchy,
+    and through declared attribute and parameter types) and a module-move rename source.
+    CRAM #967: 123 of 154 files mechanical; #210: 194 of 246.'
