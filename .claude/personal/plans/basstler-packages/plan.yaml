@@ -34,8 +34,11 @@ items:
   title: Break the remaining cycles and give each distribution its own locations, environment
     and exceptions
   track: package-split
+  branch: claude/compassionate-davinci-ontcti
+  pull_request_number: 217
+  session: https://claude.ai/code/session_018wfiv52smwbRFpSJ1ckLAf
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part
     of stack.configuration upstream_reviews reads into github; maintenance->upstream_reviews.action
     inverted so only stack depends on reviews; plugin_root into core (#76 touches it). Split
