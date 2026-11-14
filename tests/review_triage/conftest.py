@@ -6,6 +6,7 @@ committed to a scratch repository.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,7 +18,11 @@ from basstler.github.client import (
     GitHubWriter,
 )
 from basstler.repository import Repository
-from basstler.review_triage.pull_request import PullRequestChanges, PullRequestReader
+from basstler.review_triage.pull_request import (
+    CommitRange,
+    PullRequestChanges,
+    PullRequestReader,
+)
 from basstler.review_triage.renames import Rename, RenameMap
 
 from ..scratch_repository import ScratchRepository
@@ -81,6 +86,32 @@ def old_name_renamed() -> RenameMap:
     return RenameMap((Rename("old_name", "new_name", "test"),))
 
 
+def commit_trees(
+    scratch_repository: ScratchRepository,
+    base_files: dict[Path, str],
+    head_files: dict[Path, str],
+) -> CommitRange:
+    """
+    Commit a base tree, then a head tree replacing it.
+
+    :param scratch_repository: The repository to commit in.
+    :param base_files: The base tree's files, by path.
+    :param head_files: The head tree's files, by path.
+    :return: The two commits.
+    """
+    for path, text in base_files.items():
+        scratch_repository.write(path, text)
+    scratch_repository.commit_everything("base")
+    base_commit = scratch_repository.git.commit_at("HEAD")
+    scratch_repository.run_git("rm", "-r", "--quiet", ".")
+    for path, text in head_files.items():
+        scratch_repository.write(path, text)
+    scratch_repository.commit_everything("head")
+    return CommitRange(
+        scratch_repository.git, base_commit, scratch_repository.git.commit_at("HEAD")
+    )
+
+
 @pytest.fixture
 def sample_payload(scratch_repository: ScratchRepository) -> dict[str, Any]:
     """
@@ -89,17 +120,14 @@ def sample_payload(scratch_repository: ScratchRepository) -> dict[str, Any]:
     :param scratch_repository: The repository to commit in.
     :return: The pull request's payload, naming the two commits.
     """
-    for path, text in PullRequestSample.BASE_TREE.files().items():
-        scratch_repository.write(path, text)
-    scratch_repository.commit_everything("base")
-    base_commit = scratch_repository.git.commit_at("HEAD")
-    scratch_repository.run_git("rm", "-r", "--quiet", ".")
-    for path, text in PullRequestSample.HEAD_TREE.files().items():
-        scratch_repository.write(path, text)
-    scratch_repository.commit_everything("head")
+    commits = commit_trees(
+        scratch_repository,
+        PullRequestSample.BASE_TREE.files(),
+        PullRequestSample.HEAD_TREE.files(),
+    )
     payload = PullRequestSample.PAYLOAD.payload()
-    payload["base"]["sha"] = base_commit
-    payload["head"]["sha"] = scratch_repository.git.commit_at("HEAD")
+    payload["base"]["sha"] = commits.base_commit
+    payload["head"]["sha"] = commits.head_commit
     return payload
 
 

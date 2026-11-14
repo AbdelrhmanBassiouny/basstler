@@ -6,20 +6,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from basstler.review_triage.commit_tree import CommitTree
 from basstler.review_triage.comparison import (
     FileJudgment,
     FileNeedingReview,
     FileTriage,
     FileTriager,
+    JudgmentContext,
     MechanicalFile,
     ProseComparison,
-    PythonComparison,
 )
 from basstler.review_triage.declaration import DescriptionDeclaration
 from basstler.review_triage.detection import RenameDetection
+from basstler.review_triage.keyword_arguments import KeywordArgumentComparison
+from basstler.review_triage.module_moves import ModuleMoveDetection
 from basstler.review_triage.pull_request import PullRequestChanges, TriagedPullRequest
 from basstler.review_triage.rename_sources import RenameSource
 from basstler.review_triage.renames import RenameMap
+from basstler.review_triage.definitions import DefinitionIndex
 
 # %% the triage
 
@@ -71,13 +75,17 @@ class PullRequestTriager:
 
     rename_sources: tuple[RenameSource, ...] = (
         RenameDetection(),
+        ModuleMoveDetection(),
         DescriptionDeclaration(),
     )
     """
     The sources of the pull request's renames, a later source outranking an earlier.
     """
 
-    judgments: tuple[FileJudgment, ...] = (PythonComparison(), ProseComparison())
+    judgments: tuple[FileJudgment, ...] = (
+        KeywordArgumentComparison(),
+        ProseComparison(),
+    )
     """
     The judgments of each file, the first one applying to a file deciding it.
     """
@@ -90,7 +98,12 @@ class PullRequestTriager:
         renames = RenameMap.of(
             source.decisions(changes) for source in self.rename_sources
         )
-        triager = FileTriager(renames, self.judgments)
+        base_definitions = DefinitionIndex(
+            CommitTree(changes.commits.git, changes.commits.base_commit)
+        )
+        triager = FileTriager(
+            JudgmentContext(renames, base_definitions), self.judgments
+        )
         return PullRequestTriage(
             changes.pull_request,
             renames,

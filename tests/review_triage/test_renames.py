@@ -77,3 +77,22 @@ def test_renames_swapping_two_identifiers_apply_together():
         (Rename("first", "second", "diff"), Rename("second", "first", "diff"))
     )
     assert renames.renamed_prose("first then second") == "second then first"
+
+
+def test_a_moved_module_path_is_replaced_as_a_prefix():
+    """
+    A renamed dotted module path is replaced where an identifier starts with it, and
+    only there.
+    """
+    renames = RenameMap((Rename("package.old", "package.new.old", "file move"),))
+    assert [
+        renames.renamed_identifier(identifier)
+        for identifier in ("package.old.Member", "package.older", "other.package.old")
+    ] == ["package.new.old.Member", "package.older", "other.package.old"]
+
+
+def test_an_original_identifier_is_found_from_its_replacement():
+    """
+    The identifier the base commit used is found from the one replacing it.
+    """
+    assert RenameMap((DETECTED,)).original_identifier(DETECTED.new) == DETECTED.old

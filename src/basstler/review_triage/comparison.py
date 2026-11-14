@@ -13,6 +13,7 @@ from pathlib import PurePosixPath
 from basstler.class_property import classproperty
 from basstler.review_triage.python_source import PythonSource
 from basstler.review_triage.renames import RenameMap
+from basstler.review_triage.definitions import DefinitionIndex
 
 # %% what a mechanical change consists of
 
@@ -132,6 +133,23 @@ class FileNeedingReview(FileTriage):
 # %% judgments
 
 
+@dataclass(frozen=True)
+class JudgmentContext:
+    """
+    What a judgment may consult about the pull request beyond the file it judges.
+    """
+
+    renames: RenameMap = RenameMap()
+    """
+    The renames the pull request makes throughout.
+    """
+
+    base_definitions: DefinitionIndex = field(default_factory=DefinitionIndex)
+    """
+    The functions, methods and classes the base commit defines.
+    """
+
+
 class FileJudgment(ABC):
     """
     Decides whether the change of the files it applies to is mechanical.
@@ -145,10 +163,12 @@ class FileJudgment(ABC):
         """
 
     @abstractmethod
-    def changes(self, change: FileChange, renames: RenameMap) -> ChangeKinds | None:
+    def changes(
+        self, change: FileChange, context: JudgmentContext
+    ) -> ChangeKinds | None:
         """
         :param change: A file this judgment applies to.
-        :param renames: The renames the pull request makes throughout.
+        :param context: What the judgment may consult about the pull request.
         :return: What the change consists of, ``None`` when it is not provably
             mechanical.
         """
@@ -168,12 +188,12 @@ class ContentComparison(FileJudgment, ABC):
 
     @abstractmethod
     def text_changes(
-        self, base_text: str, head_text: str, renames: RenameMap
+        self, base_text: str, head_text: str, context: JudgmentContext
     ) -> ChangeKinds | None:
         """
         :param base_text: The file's content in the base commit.
         :param head_text: The file's content in the head commit.
-        :param renames: The renames the pull request makes throughout.
+        :param context: What the judgment may consult about the pull request.
         :return: What the change consists of, ``None`` when it is not provably
             mechanical.
         """
@@ -185,8 +205,10 @@ class ContentComparison(FileJudgment, ABC):
             and change.path.suffix in self.suffixes
         )
 
-    def changes(self, change: FileChange, renames: RenameMap) -> ChangeKinds | None:
-        return self.text_changes(change.base_text, change.head_text, renames)
+    def changes(
+        self, change: FileChange, context: JudgmentContext
+    ) -> ChangeKinds | None:
+        return self.text_changes(change.base_text, change.head_text, context)
 
 
 class ProseComparison(ContentComparison):
@@ -199,11 +221,11 @@ class ProseComparison(ContentComparison):
         return frozenset({".md", ".rst", ".txt"})
 
     def text_changes(
-        self, base_text: str, head_text: str, renames: RenameMap
+        self, base_text: str, head_text: str, context: JudgmentContext
     ) -> ChangeKinds | None:
         if base_text == head_text:
             return NO_CHANGE
-        renamed = renames.renamed_prose(base_text)
+        renamed = context.renames.renamed_prose(base_text)
         if renamed == head_text:
             return frozenset({MechanicalChange.RENAME})
         if base_text.split() == head_text.split():
@@ -230,18 +252,16 @@ class PythonComparison(ContentComparison):
         return frozenset({".py", ".pyi"})
 
     def text_changes(
-        self, base_text: str, head_text: str, renames: RenameMap
+        self, base_text: str, head_text: str, context: JudgmentContext
     ) -> ChangeKinds | None:
         base = PythonSource(base_text)
         head = PythonSource(head_text)
-        kinds: set[ChangeKind] = set()
-        head_code = head.code(RenameMap())
-        if base.code(RenameMap()) != head_code:
-            if base.code(renames) != head_code:
-                return None
-            kinds.add(MechanicalChange.RENAME)
+        code_kinds = self.code_changes(base, head, context)
+        if code_kinds is None:
+            return None
+        kinds = set(code_kinds)
         if base.import_statements != head.import_statements:
-            if not base.imports(renames).agrees_with(head.imports(RenameMap())):
+            if not base.imports(context.renames).agrees_with(head.import_bindings):
                 return None
             kinds.add(MechanicalChange.IMPORTS)
         prose_pairs = [
@@ -249,13 +269,30 @@ class PythonComparison(ContentComparison):
             (base.comments, head.comments),
         ]
         for base_prose, head_prose in prose_pairs:
-            prose_kinds = self.prose.text_changes(base_prose, head_prose, renames)
+            prose_kinds = self.prose.text_changes(base_prose, head_prose, context)
             if prose_kinds is None:
                 return None
             kinds |= prose_kinds
         if not kinds and base_text != head_text:
             kinds.add(MechanicalChange.FORMATTING)
         return frozenset(kinds)
+
+    def code_changes(
+        self, base: PythonSource, head: PythonSource, context: JudgmentContext
+    ) -> ChangeKinds | None:
+        """
+        :param base: The file's base version.
+        :param head: The file's head version.
+        :param context: What the judgment may consult about the pull request.
+        :return: What the change of the code, imports and docstrings aside, consists
+            of, ``None`` when it is not provably mechanical.
+        """
+        head_code = head.code(RenameMap())
+        if base.code(RenameMap()) == head_code:
+            return NO_CHANGE
+        if base.code(context.renames) == head_code:
+            return frozenset({MechanicalChange.RENAME})
+        return None
 
 
 # %% judging a file
@@ -268,9 +305,9 @@ class FileTriager:
     judgment applies to is mechanical only when its content is unchanged.
     """
 
-    renames: RenameMap
+    context: JudgmentContext
     """
-    The renames the pull request makes throughout.
+    What the judgments may consult about the pull request.
     """
 
     judgments: tuple[FileJudgment, ...] = (PythonComparison(), ProseComparison())
@@ -300,5 +337,5 @@ class FileTriager:
             return NO_CHANGE
         for judgment in self.judgments:
             if judgment.applies_to(change):
-                return judgment.changes(change, self.renames)
+                return judgment.changes(change, self.context)
         return None

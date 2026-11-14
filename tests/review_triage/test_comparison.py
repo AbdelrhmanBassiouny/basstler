@@ -16,6 +16,7 @@ from basstler.review_triage.comparison import (
     FileJudgment,
     FileNeedingReview,
     FileTriager,
+    JudgmentContext,
     MechanicalChange,
     MechanicalFile,
     ProseComparison,
@@ -53,9 +54,9 @@ def test_a_mechanical_change_is_reported_with_its_kinds(
     the kinds of change it consists of.
     """
     change = sample.change()
-    assert FileTriager(old_name_renamed).triage(change) == MechanicalFile(
-        change, frozenset(kinds)
-    )
+    assert FileTriager(JudgmentContext(old_name_renamed)).triage(
+        change
+    ) == MechanicalFile(change, frozenset(kinds))
 
 
 @pytest.mark.parametrize(
@@ -75,7 +76,9 @@ def test_a_change_of_meaning_needs_review(
     review, renames or not.
     """
     change = sample.change()
-    assert FileTriager(old_name_renamed).triage(change) == FileNeedingReview(change)
+    assert FileTriager(JudgmentContext(old_name_renamed)).triage(
+        change
+    ) == FileNeedingReview(change)
 
 
 def test_a_rename_the_pull_request_does_not_make_needs_review():
@@ -84,7 +87,7 @@ def test_a_rename_the_pull_request_does_not_make_needs_review():
     throughout.
     """
     change = FileSample.IDENTIFIER_RENAMED.change()
-    assert FileTriager(RenameMap()).triage(change) == FileNeedingReview(change)
+    assert FileTriager(JudgmentContext()).triage(change) == FileNeedingReview(change)
 
 
 # %% whole files
@@ -99,7 +102,7 @@ def test_an_unchanged_moved_file_is_mechanical():
         head_text=FileSample.BEHAVIOUR_CHANGED.change().base_text,
         previous_path=PurePosixPath("old/sample.py"),
     )
-    assert FileTriager(RenameMap()).triage(change) == MechanicalFile(
+    assert FileTriager(JudgmentContext()).triage(change) == MechanicalFile(
         change, frozenset({MechanicalChange.MOVE})
     )
 
@@ -121,7 +124,7 @@ def test_a_file_no_judgment_proves_mechanical_needs_review(change: FileChange):
     An added, deleted or binary file, or a changed file of a type nothing judges, needs
     review.
     """
-    assert FileTriager(RenameMap()).triage(change) == FileNeedingReview(change)
+    assert FileTriager(JudgmentContext()).triage(change) == FileNeedingReview(change)
 
 
 # %% extending the triage
@@ -143,7 +146,9 @@ class GeneratedFileJudgment(FileJudgment):
     def applies_to(self, change: FileChange) -> bool:
         return change.path.parts[0] == "generated"
 
-    def changes(self, change: FileChange, renames: RenameMap) -> ChangeKinds | None:
+    def changes(
+        self, change: FileChange, context: JudgmentContext
+    ) -> ChangeKinds | None:
         return frozenset({GeneratedChange.GENERATED})
 
 
@@ -155,7 +160,8 @@ def test_an_extension_judgment_decides_the_files_it_applies_to():
         FileSample.BEHAVIOUR_CHANGED.change(), path=PurePosixPath("generated/sample.py")
     )
     triager = FileTriager(
-        RenameMap(), (GeneratedFileJudgment(), PythonComparison(), ProseComparison())
+        JudgmentContext(),
+        (GeneratedFileJudgment(), PythonComparison(), ProseComparison()),
     )
     assert triager.triage(change) == MechanicalFile(
         change, frozenset({GeneratedChange.GENERATED})

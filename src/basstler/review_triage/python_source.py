@@ -11,7 +11,7 @@ import io
 import keyword
 import tokenize
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 
 from basstler.review_triage.renames import RenameMap
@@ -105,6 +105,22 @@ class ImportBindings:
             if binding.bound_name == bound_name
         )
 
+    def refers_to(self, expression: ast.expr, module: str, member: str) -> bool:
+        """
+        :param expression: A name or an attribute in the file.
+        :param module: The module defining the member.
+        :param member: The member's name in it.
+        :return: Whether the expression refers to that member through these bindings.
+        """
+        if isinstance(expression, ast.Name):
+            return self.sources_of(expression.id) == {f"{module}.{member}"}
+        return (
+            isinstance(expression, ast.Attribute)
+            and expression.attr == member
+            and isinstance(expression.value, ast.Name)
+            and self.sources_of(expression.value.id) == {module}
+        )
+
     def agrees_with(self, other: ImportBindings) -> bool:
         """
         :param other: The bindings of another version of the file.
@@ -132,6 +148,13 @@ class PythonSource:
     The file's content.
     """
 
+    code_trees: dict[RenameMap, ast.Module] = field(
+        default_factory=dict, compare=False, repr=False
+    )
+    """
+    :meth:`code_tree` under each renames asked for so far.
+    """
+
     @cached_property
     def tree(self) -> ast.Module:
         """
@@ -151,12 +174,15 @@ class PythonSource:
         IdentifierRenamer(renames).visit(tree)
         return tree
 
-    def code(self, renames: RenameMap) -> str:
+    def code_tree(self, renames: RenameMap) -> ast.Module:
         """
         :param renames: The renames to apply first.
         :return: The file's syntax tree without its imports, other than those of
-            ``__future__``, and with every documentation string emptied, dumped as text.
+            ``__future__``, and with every documentation string emptied; not to be
+            modified, as it is kept for the next call.
         """
+        if renames in self.code_trees:
+            return self.code_trees[renames]
         tree = self.renamed_tree(renames)
         for node in list(ast.walk(tree)):
             for field_name, value in ast.iter_fields(node):
@@ -164,7 +190,15 @@ class PythonSource:
                     isinstance(item, ast.stmt) for item in value
                 ):
                     setattr(node, field_name, list(self.code_statements(value)))
-        return ast.dump(tree)
+        self.code_trees[renames] = tree
+        return tree
+
+    def code(self, renames: RenameMap) -> str:
+        """
+        :param renames: The renames to apply first.
+        :return: :meth:`code_tree`, dumped as text.
+        """
+        return ast.dump(self.code_tree(renames))
 
     @staticmethod
     def code_statements(statements: list[ast.stmt]) -> Iterator[ast.stmt]:
@@ -200,20 +234,34 @@ class PythonSource:
         :param renames: The renames to apply first.
         :return: The names the file's imports bind, other than those of ``__future__``.
         """
+        renamed = renames.renamed_identifier
         bindings: set[ImportBinding] = set()
-        for node in ast.walk(self.renamed_tree(renames)):
+        for node in ast.walk(self.tree):
             if isinstance(node, ast.Import):
                 bindings |= {
-                    ImportBinding(alias.asname or alias.name.split(".")[0], alias.name)
+                    ImportBinding(
+                        renamed(alias.asname or alias.name.split(".")[0]),
+                        renamed(alias.name),
+                    )
                     for alias in node.names
                 }
             elif isinstance(node, ast.ImportFrom) and node.module != FUTURE_MODULE:
-                module = "." * node.level + (node.module or "")
+                module = "." * node.level + renamed(node.module or "")
                 bindings |= {
-                    ImportBinding(alias.asname or alias.name, f"{module}.{alias.name}")
+                    ImportBinding(
+                        renamed(alias.asname or alias.name),
+                        f"{module}.{renamed(alias.name)}",
+                    )
                     for alias in node.names
                 }
         return ImportBindings(frozenset(bindings))
+
+    @cached_property
+    def import_bindings(self) -> ImportBindings:
+        """
+        The names the file's imports bind, as the file spells them.
+        """
+        return self.imports(RenameMap())
 
     @cached_property
     def import_statements(self) -> str:
@@ -262,6 +310,36 @@ class PythonSource:
             if token.type
             in (tokenize.NAME, tokenize.OP, tokenize.NUMBER, tokenize.STRING)
         )
+
+    def tokens_on_lines(self, first: int, end: int) -> tuple[tokenize.TokenInfo, ...]:
+        """
+        :param first: The number of the first line, counted from one.
+        :param end: The number of the line after the last.
+        :return: The :attr:`significant_tokens` starting on those lines.
+        """
+        return tuple(
+            token for token in self.significant_tokens if first <= token.start[0] < end
+        )
+
+    @staticmethod
+    def referenced_name(expression: ast.expr) -> str | None:
+        """
+        :param expression: An expression naming something, such as a decorator, a base
+            class or an annotation.
+        :return: The last name it refers to, ignoring subscripts and calls, ``None``
+            when it is no reference.
+        """
+        if isinstance(expression, ast.Name):
+            return expression.id
+        if isinstance(expression, ast.Attribute):
+            return expression.attr
+        if isinstance(expression, ast.Subscript):
+            return PythonSource.referenced_name(expression.value)
+        if isinstance(expression, ast.Call):
+            return PythonSource.referenced_name(expression.func)
+        if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+            return expression.value.split("[")[0].split(".")[-1].strip()
+        return None
 
     @staticmethod
     def is_identifier(token: tokenize.TokenInfo) -> bool:

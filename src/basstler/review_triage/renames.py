@@ -16,12 +16,12 @@ from functools import cached_property
 @dataclass(frozen=True)
 class Rename:
     """
-    One identifier replaced by another wherever it occurs.
+    One identifier, or one dotted module path, replaced by another wherever it occurs.
     """
 
     old: str
     """
-    The identifier the base commit uses.
+    The identifier the base commit uses, dotted when it names a module.
     """
 
     new: str
@@ -102,14 +102,46 @@ class RenameMap:
         alternatives = sorted(self.replacements, key=len, reverse=True)
         return re.compile(r"\b(?:" + "|".join(map(re.escape, alternatives)) + r")\b")
 
+    @cached_property
+    def renamed_modules(self) -> tuple[str, ...]:
+        """
+        The old dotted module paths, longest first.
+        """
+        return tuple(
+            sorted(
+                (old for old in self.replacements if DOTTED_NAME_SEPARATOR in old),
+                key=len,
+                reverse=True,
+            )
+        )
+
     def renamed_identifier(self, identifier: str) -> str:
         """
         :param identifier: A name, or a dotted path of names.
-        :return: It with every component that is renamed replaced.
+        :return: It with its longest renamed module prefix replaced, then every
+            other component that is renamed.
         """
-        return DOTTED_NAME_SEPARATOR.join(
+        prefix = ""
+        for module in self.renamed_modules:
+            if identifier == module or identifier.startswith(
+                module + DOTTED_NAME_SEPARATOR
+            ):
+                prefix = self.replacements[module]
+                identifier = identifier.removeprefix(module)
+                break
+        return prefix + DOTTED_NAME_SEPARATOR.join(
             self.replacements.get(component, component)
             for component in identifier.split(DOTTED_NAME_SEPARATOR)
+        )
+
+    def original_identifier(self, identifier: str) -> str:
+        """
+        :param identifier: A name the head commit uses.
+        :return: The name the base commit used in its place.
+        """
+        return next(
+            (rename.old for rename in self.renames if rename.new == identifier),
+            identifier,
         )
 
     def renamed_prose(self, text: str) -> str:
