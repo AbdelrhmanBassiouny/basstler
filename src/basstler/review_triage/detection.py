@@ -5,71 +5,15 @@ Finding the renames a pull request makes throughout from its diff alone.
 from __future__ import annotations
 
 import difflib
-from dataclasses import dataclass
-from enum import IntEnum
+import tokenize
 
 from basstler.class_property import classproperty
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.review_triage.commit_tree import CommitTree
 from basstler.review_triage.comparison import PythonComparison
 from basstler.review_triage.pull_request import PullRequestChanges
 from basstler.review_triage.python_source import PythonSource
 from basstler.review_triage.rename_sources import RenameSource
 from basstler.review_triage.renames import Rename, RenameCandidates, RenameDecisions
-
-# %% the tree search
-
-
-class GitGrepExitCode(IntEnum):
-    """
-    What ``git grep`` exits with.
-    """
-
-    MATCH = 0
-    """
-    At least one line matched.
-    """
-
-    NO_MATCH = 1
-    """
-    Nothing matched.
-    """
-
-
-@dataclass(frozen=True)
-class CommitTree:
-    """
-    The files of one commit, searched for identifiers.
-    """
-
-    git: GitCommandRunner
-    """
-    The checkout holding the commit.
-    """
-
-    commit: str
-    """
-    The commit searched.
-    """
-
-    def mentions(self, identifier: str) -> bool:
-        """
-        :param identifier: A name.
-        :return: Whether any file of the commit holds it as a whole word.
-        :raises GitCommandFailed: If the search itself fails.
-        """
-        search = self.git.attempt(
-            "grep",
-            "--quiet",
-            "--word-regexp",
-            "--fixed-strings",
-            "-e",
-            identifier,
-            self.commit,
-        )
-        if search.exit_status == GitGrepExitCode.NO_MATCH:
-            return False
-        return search.raise_if_failed().succeeded
-
 
 # %% detection
 
@@ -77,8 +21,8 @@ class CommitTree:
 class RenameDetection(RenameSource):
     """
     Detects a rename as an identifier the diff consistently replaces by another, where
-    the old identifier is gone from the head commit and the new one absent from the
-    base commit.
+    the old identifier is gone from the head commit and the new one absent from the base
+    commit.
     """
 
     @classproperty
@@ -115,8 +59,31 @@ class RenameDetection(RenameSource):
         :param head: The file's head version.
         :param candidates: The substitutions found so far.
         """
-        base_tokens = base.significant_tokens
-        head_tokens = head.significant_tokens
+        lines = difflib.SequenceMatcher(
+            a=base.text.splitlines(), b=head.text.splitlines(), autojunk=False
+        )
+        for tag, base_start, base_end, head_start, head_end in lines.get_opcodes():
+            if tag == "replace":
+                RenameDetection.collect_tokens(
+                    base.tokens_on_lines(base_start + 1, base_end + 1),
+                    head.tokens_on_lines(head_start + 1, head_end + 1),
+                    candidates,
+                )
+
+    @staticmethod
+    def collect_tokens(
+        base_tokens: tuple[tokenize.TokenInfo, ...],
+        head_tokens: tuple[tokenize.TokenInfo, ...],
+        candidates: RenameCandidates,
+    ) -> None:
+        """
+        Add each identifier of a replaced block of lines that the head version puts in
+        place of another to *candidates*.
+
+        :param base_tokens: The block's significant tokens in the base version.
+        :param head_tokens: Those of the lines replacing it in the head version.
+        :param candidates: The substitutions found so far.
+        """
         matcher = difflib.SequenceMatcher(
             a=[token.string for token in base_tokens],
             b=[token.string for token in head_tokens],

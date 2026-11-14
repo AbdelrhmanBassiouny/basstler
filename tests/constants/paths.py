@@ -117,6 +117,11 @@ class DatasetLocation(PathEnumeration):
     A workflow that runs the package's own entry point.
     """
 
+    NON_ASCII_TEXT = DIRECTORY / "git-commands" / "non-ascii-text.txt"
+    """
+    Text whose UTF-8 encoding the Windows locale encoding cannot decode.
+    """
+
     BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
     """
     The item-bootstrap fixture plan: two items, a folded note, blank lines between

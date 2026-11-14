@@ -16,12 +16,12 @@ from functools import cached_property
 @dataclass(frozen=True)
 class Rename:
     """
-    One identifier replaced by another wherever it occurs.
+    One identifier, or one dotted module path, replaced by another wherever it occurs.
     """
 
     old: str
     """
-    The identifier the base commit uses.
+    The identifier the base commit uses, dotted when it names a module.
     """
 
     new: str
@@ -32,6 +32,11 @@ class Rename:
     found_by: str
     """
     The label of the rename source that found it.
+    """
+
+    is_file_path: bool = False
+    """
+    Whether both sides are file paths, which never occur inside code.
     """
 
 
@@ -86,6 +91,13 @@ class RenameMap:
         return cls(tuple(renames[old] for old in sorted(renames)))
 
     @cached_property
+    def identifier_renames(self) -> tuple[Rename, ...]:
+        """
+        The renames of identifiers and module paths, those of file paths left out.
+        """
+        return tuple(rename for rename in self.renames if not rename.is_file_path)
+
+    @cached_property
     def replacements(self) -> dict[str, str]:
         """
         The new identifier of each old one.
@@ -99,17 +111,69 @@ class RenameMap:
         """
         if not self.renames:
             return None
-        alternatives = sorted(self.replacements, key=len, reverse=True)
-        return re.compile(r"\b(?:" + "|".join(map(re.escape, alternatives)) + r")\b")
+        alternatives = [
+            self.whole_word_pattern(rename)
+            for rename in sorted(
+                self.renames, key=lambda rename: len(rename.old), reverse=True
+            )
+        ]
+        return re.compile("|".join(alternatives))
+
+    @staticmethod
+    def whole_word_pattern(rename: Rename) -> str:
+        """
+        :param rename: A rename.
+        :return: What matches its old side only where it stands whole; a file path
+            never as the end of a longer path.
+        """
+        if not rename.is_file_path:
+            return rf"\b{re.escape(rename.old)}\b"
+        return rf"(?<![\w/.-]){re.escape(rename.old)}(?![\w/-])"
+
+    @cached_property
+    def renamed_modules(self) -> tuple[str, ...]:
+        """
+        The old dotted module paths, longest first.
+        """
+        return tuple(
+            sorted(
+                (
+                    rename.old
+                    for rename in self.renames
+                    if DOTTED_NAME_SEPARATOR in rename.old and not rename.is_file_path
+                ),
+                key=len,
+                reverse=True,
+            )
+        )
 
     def renamed_identifier(self, identifier: str) -> str:
         """
         :param identifier: A name, or a dotted path of names.
-        :return: It with every component that is renamed replaced.
+        :return: It with its longest renamed module prefix replaced, then every
+            other component that is renamed.
         """
-        return DOTTED_NAME_SEPARATOR.join(
+        prefix = ""
+        for module in self.renamed_modules:
+            if identifier == module or identifier.startswith(
+                module + DOTTED_NAME_SEPARATOR
+            ):
+                prefix = self.replacements[module]
+                identifier = identifier.removeprefix(module)
+                break
+        return prefix + DOTTED_NAME_SEPARATOR.join(
             self.replacements.get(component, component)
             for component in identifier.split(DOTTED_NAME_SEPARATOR)
+        )
+
+    def original_identifier(self, identifier: str) -> str:
+        """
+        :param identifier: A name the head commit uses.
+        :return: The name the base commit used in its place.
+        """
+        return next(
+            (rename.old for rename in self.renames if rename.new == identifier),
+            identifier,
         )
 
     def renamed_prose(self, text: str) -> str:

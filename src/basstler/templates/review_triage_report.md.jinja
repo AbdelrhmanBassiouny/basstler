@@ -2,12 +2,12 @@
 
 **{{ triage.files_needing_review | length }} of {{ triage.files | length }} files need review**; the other {{ triage.mechanical_files | length }} change only mechanically.
 
-{% if triage.renames.renames %}
+{% if triage.renames.identifier_renames %}
 Renames applied - check them once here instead of in every file:
 
 | Old | New | Found by |
 | --- | --- | --- |
-{% for rename in triage.renames.renames %}
+{% for rename in triage.renames.identifier_renames %}
 | `{{ rename.old }}` | `{{ rename.new }}` | {{ rename.found_by }} |
 {% endfor %}
 
