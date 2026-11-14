@@ -139,7 +139,7 @@ def test_the_stack_promotes_exactly_the_branches_its_rule_finds_promotable():
 
 def test_the_target_of_a_configuration_names_its_upstream_and_fork_owner():
     configuration = make_configuration()
-    assert PromotionTarget.of(configuration) == PromotionTarget(
+    assert PromotionTarget.from_configuration(configuration) == PromotionTarget(
         upstream_repository=configuration.upstream_repository,
         upstream_base=configuration.upstream_base,
         fork_owner=configuration.fork_repository.owner,
@@ -148,7 +148,7 @@ def test_the_target_of_a_configuration_names_its_upstream_and_fork_owner():
 
 def test_a_link_built_for_a_target_is_the_link_built_for_its_configuration():
     configuration = make_configuration()
-    target = PromotionTarget.of(configuration)
+    target = PromotionTarget.from_configuration(configuration)
     assert PromotionLink.for_target(
         target, StackBranch.FEATURE, StackSampleText.TITLE, StackSampleText.SHORT_BODY
     ) == PromotionLink.build(

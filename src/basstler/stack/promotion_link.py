@@ -54,7 +54,7 @@ class PromotionTarget:
     """The account owning the fork the branch lives in."""
 
     @classmethod
-    def of(cls, configuration: Configuration) -> PromotionTarget:
+    def from_configuration(cls, configuration: Configuration) -> PromotionTarget:
         """
         :param configuration: The resolved configuration naming both repositories.
         :return: The target it describes.
@@ -110,7 +110,9 @@ class PromotionLink:
         :return: The link, flagged if the body was shortened.
         :raises MissingUpstreamRepositoryError: If the project names no upstream.
         """
-        return cls.for_target(PromotionTarget.of(configuration), branch, title, body)
+        return cls.for_target(
+            PromotionTarget.from_configuration(configuration), branch, title, body
+        )
 
     @classmethod
     def for_target(
