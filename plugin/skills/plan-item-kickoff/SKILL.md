@@ -13,7 +13,13 @@ Plan-agnostic: never hardcode a plan id, item or branch. Step 1 creates nothing.
 
 ## 1. Gather
 
-Follow [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md). Then learn
+Follow [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md), with this setup gate:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.gate --skill plan-item-kickoff; echo "setup gate exit status: $?"
+```
+
+Then learn
 the pattern this item follows from what landed: for the files it will touch, find the
 merged pull requests that last changed them (`git log <base> -- <paths>`) and read their
 diffs and descriptions (`mcp__github__pull_request_read`), including review-driven

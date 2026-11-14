@@ -41,7 +41,12 @@ from basstler.maintenance.git_commands import TransientGitSetting
 from basstler.maintenance.github import GitHubRepository
 from basstler.plugin_root import PluginRoot
 from basstler.setup.exceptions import ForeignNotesRemoteError, HookScriptFailedError
-from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
+from basstler.setup.report import (
+    CheckStatus,
+    SetupCheck,
+    SetupCheckScript,
+    SetupReport,
+)
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -406,15 +411,7 @@ class PersonalNotesSetup:
         environment = dict(self.environment)
         if setting is not None:
             environment |= setting.variables(environment)
-        return subprocess.run(
-            Bash.locate(self.environment).command(
-                self.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT)
-            ),
-            cwd=self.project_root,
-            env=environment,
-            capture_output=True,
-            text=True,
-        )
+        return SetupCheckScript(self.project_root, environment, self.plugin_root).run()
 
     def run_hook_script(self, script: PluginLocation, *arguments: str) -> None:
         """

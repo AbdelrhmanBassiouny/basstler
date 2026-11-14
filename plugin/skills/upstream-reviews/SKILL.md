@@ -59,9 +59,13 @@ The upstream has to be named somewhere `stack configuration` reads it: the
 project's committed `.claude/basstler/stack.toml`, or the user's own
 `.claude/personal/stack.toml` on the personal-notes branch. Check for it, and
 everything else this skill relies on, first: follow
-`skills/setup-personal-notes/prerequisite-check.md`, passing
-`--require-upstream` to `check-setup.sh` so a missing upstream runs the setup
-(which asks for it) instead of failing in step 1.
+`skills/setup-personal-notes/prerequisite-check.md` with this skill's gate, whose
+checks include the upstream, so a missing one runs the setup (which asks for it)
+instead of failing in step 1:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.gate --skill upstream-reviews; echo "setup gate exit status: $?"
+```
 
 ## 1. Resolve the target, the fork and the upstream
 

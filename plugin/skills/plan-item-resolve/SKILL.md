@@ -36,7 +36,11 @@ resume any other session.
 
 Follow [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md) end to end — the setup check, the
 stack pass, the item's brief, the tracking issue's comments and the project's
-rules. `plan-item-kickoff` runs the same procedure.
+rules. `plan-item-kickoff` runs the same procedure. Its setup gate is this skill's:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.gate --skill plan-item-resolve; echo "setup gate exit status: $?"
+```
 
 Then add the part only a resolve needs — **the live state of work that
 already exists**, which is where the cause of a stall almost always is:

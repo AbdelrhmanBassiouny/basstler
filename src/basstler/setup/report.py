@@ -8,10 +8,15 @@ check each row is about and the status it reports.
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
+from pathlib import Path
 
+from basstler.bash import Bash
 from basstler.exit_codes import SetupCheckExitCode
+from basstler.locations import PluginLocation
+from basstler.plugin_root import PluginRoot
 from basstler.setup.exceptions import CheckSetupFailedError
 
 # %% what a report is made of
@@ -297,4 +302,45 @@ class SetupReport:
                 or fields[ReportRowPosition.CHECK] in RepositoryCheck
             )
             and fields[ReportRowPosition.STATUS] in CheckStatus
+        )
+
+
+# %% running the script
+
+
+@dataclass(frozen=True)
+class SetupCheckScript:
+    """
+    check-setup.sh as it runs against one clone.
+    """
+
+    project_root: Path
+    """
+    The clone it inspects.
+    """
+
+    environment: Mapping[str, str]
+    """
+    The environment it runs in.
+    """
+
+    plugin_root: PluginRoot
+    """
+    The plugin it belongs to.
+    """
+
+    def run(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        """
+        :param arguments: Its flags.
+        :return: The finished run, its report and standard error captured; a non-zero
+            status means only that something still needs setting up.
+        """
+        return subprocess.run(
+            Bash.locate(self.environment).command(
+                self.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT), *arguments
+            ),
+            cwd=self.project_root,
+            env=dict(self.environment),
+            capture_output=True,
+            text=True,
         )

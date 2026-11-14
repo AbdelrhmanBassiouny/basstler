@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from basstler.setup.gate import GatedSkill
 
 from ..constants.paths import RepositoryLocation, SkillDirectory
 
@@ -157,3 +158,37 @@ def test_the_sweep_reads_the_skill_documents_rather_than_nothing() -> None:
     fail this module.
     """
     assert skill_documents() != []
+
+
+# %% each skill gates on its own checks
+
+GATE_COMMAND = re.compile(r"setup\.gate --skill (?P<skill>[a-z-]+)")
+"""
+How a document runs a skill's setup gate, naming the skill.
+"""
+
+
+def gated_skill_names() -> list[str]:
+    """
+    :return: Every skill name a skill document runs the setup gate with, in the order
+        found.
+    """
+    return [
+        match["skill"]
+        for document in skill_documents()
+        for match in GATE_COMMAND.finditer(document.text)
+    ]
+
+
+def test_every_skill_a_document_gates_is_a_gated_skill() -> None:
+    """
+    A document runs the gate only with a skill the gate knows.
+    """
+    assert set(gated_skill_names()) <= set(GatedSkill)
+
+
+def test_every_gated_skill_runs_its_gate() -> None:
+    """
+    Every skill the gate knows runs it from its own document.
+    """
+    assert set(GatedSkill) <= set(gated_skill_names())

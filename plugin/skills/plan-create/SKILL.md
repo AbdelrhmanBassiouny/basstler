@@ -27,9 +27,13 @@ takes a shortcut a hand-written manifest wouldn't also have to clear.
 
 Everything below writes to the personal-notes branch, which the user may not
 have set up yet. Follow
-`skills/setup-personal-notes/prerequisite-check.md` before step 1:
-run the check, and if it reports anything missing, run `/setup-personal-notes`
-without asking first, rather than failing partway through drafting a plan.
+`skills/setup-personal-notes/prerequisite-check.md` before step 1 with this skill's
+gate, and if it reports anything missing, run `/setup-personal-notes` without asking
+first, rather than failing partway through drafting a plan:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.gate --skill plan-create; echo "setup gate exit status: $?"
+```
 
 ## 1. Establish the plan id and refuse to silently overwrite
 

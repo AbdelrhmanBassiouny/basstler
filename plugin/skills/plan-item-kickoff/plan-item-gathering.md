@@ -6,7 +6,7 @@ decided about the item, before either acts.
 ## 1. Setup
 
 Run [`prerequisite-check.md`](../setup-personal-notes/prerequisite-check.md)'s check
-first.
+first, with the setup gate the running skill's `SKILL.md` gives.
 
 ## 2. The stack
 

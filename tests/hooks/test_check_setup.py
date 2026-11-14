@@ -30,7 +30,15 @@ from basstler.personal_notes import access
 from basstler.plan_site import build_start, dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
-from basstler.setup.report import CheckResult, CheckStatus, SetupCheck, SetupReport
+from basstler.plugin_root import PluginRoot
+from basstler.setup.gate import GatedSkill
+from basstler.setup.report import (
+    CheckResult,
+    CheckStatus,
+    SetupCheck,
+    SetupCheckScript,
+    SetupReport,
+)
 
 from ..constants.environment import ConfigurationVariable, ScrubbedEnvironmentPrefix
 from ..constants.notes import ScratchBranch
@@ -951,3 +959,116 @@ def test_an_unknown_check_is_a_usage_error(check_setup_repository: ScratchReposi
 
     assert result.returncode == SetupCheckExitCode.USAGE
     assert result.stdout == ""
+
+
+# %% each skill's setup gate
+
+
+def gate_script(repository: ScratchRepository) -> SetupCheckScript:
+    """
+    :param repository: A fixture-built scratch repository.
+    :return: Its check-setup.sh, run as :meth:`ScratchRepository.run_hook_script` runs it.
+    """
+    return SetupCheckScript(
+        project_root=repository.project_root,
+        environment=repository.runner_environment(
+            **{ConfigurationVariable.REPOSITORY_URL: str(repository.project_root)}
+        ),
+        plugin_root=PluginRoot(repository.plugin_root),
+    )
+
+
+PLANNING_SKILLS = [
+    skill
+    for skill in GatedSkill
+    if SetupCheck.STACK_UPSTREAM not in skill.required_checks
+]
+"""
+The gated skills that need no upstream named.
+"""
+
+
+@pytest.mark.parametrize("skill", list(GatedSkill))
+def test_a_gate_reports_exactly_the_checks_its_skill_needs(
+    check_setup_repository: ScratchRepository, skill: GatedSkill
+):
+    """
+    A gate prints a row for each check its skill needs, and for no other.
+    """
+    check_setup_repository.write(
+        ProjectLocation.PROJECT_STACK_CONFIGURATION,
+        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(),
+    )
+
+    report = skill.gate(gate_script(check_setup_repository))
+
+    assert set(report.results) == skill.required_checks
+
+
+@pytest.mark.parametrize("skill", PLANNING_SKILLS)
+def test_a_plan_site_needing_setup_does_not_stop_a_planning_skill(
+    dispatch_needing_setup: ScratchRepository, skill: GatedSkill
+):
+    """
+    The row that sent every skill into the setup no longer gates a planning skill.
+    """
+    report = skill.gate(gate_script(dispatch_needing_setup))
+
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
+
+
+def test_a_plan_site_needing_setup_does_not_stop_reading_upstream_reviews(
+    dispatch_needing_setup: ScratchRepository,
+):
+    """
+    Nor does it gate reading upstream reviews, once an upstream is named.
+    """
+    dispatch_needing_setup.write(
+        ProjectLocation.PROJECT_STACK_CONFIGURATION,
+        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(),
+    )
+
+    report = GatedSkill.UPSTREAM_REVIEWS.gate(gate_script(dispatch_needing_setup))
+
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
+
+
+def test_reading_upstream_reviews_stops_without_a_named_upstream(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    Reading upstream reviews needs an upstream named, so its gate requires one.
+    """
+    report = GatedSkill.UPSTREAM_REVIEWS.gate(gate_script(check_setup_repository))
+
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert report.results[SetupCheck.STACK_UPSTREAM].status == CheckStatus.NEEDS_SETUP
+
+
+@pytest.mark.parametrize("skill", PLANNING_SKILLS)
+def test_a_planning_skill_needs_no_named_upstream(
+    check_setup_repository: ScratchRepository, skill: GatedSkill
+):
+    """
+    A planning skill runs in a project that names no upstream.
+    """
+    report = skill.gate(gate_script(check_setup_repository))
+
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
+
+
+@pytest.mark.parametrize("skill", list(GatedSkill))
+def test_every_skill_stops_without_the_notes_branch(
+    check_setup_repository: ScratchRepository, skill: GatedSkill, tmp_path: Path
+):
+    """
+    Every gated skill reads the notes branch, so a missing one stops each.
+    """
+    check_setup_repository.resolve_notes_remote_to(
+        initialize_bare_repository(tmp_path / "empty-remote.git")
+    )
+
+    report = skill.gate(gate_script(check_setup_repository))
+
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert report.results[SetupCheck.NOTES_BRANCH].status == CheckStatus.NEEDS_SETUP
