@@ -110,9 +110,12 @@ It then lists the steps only you can take, with links that fill the forms in:
 
    Keep it in your fork where you have one: everyone who can push to a repository can
    read its secrets through a workflow.
-3. **Merge the pull request adding the workflow** if the repository is no fork. The
-   command opens it, or, where it may not push, links GitHub's new-file page with the
-   workflow filled in.
+3. **Merge the pull request adding the workflow** if the repository is no fork. When
+   an open pull request already carries the workflow, the command names it (the lowest
+   one, for stacked pull requests) and opens nothing. Otherwise it opens one. Where
+   GitHub refuses to open it, it links the pull request form with the title and
+   description filled in. Where it may not even push the branch, it links GitHub's
+   new-file page with the workflow filled in.
 
 Where the secret cannot be read, as from a cloud session, the two token steps say to
 skip them if it is stored already.

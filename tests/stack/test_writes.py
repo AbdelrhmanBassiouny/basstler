@@ -20,7 +20,8 @@ from basstler.stack.exceptions import (
     PromotionLinkTooLongError,
 )
 from basstler.stack.label_write import LabelWrite
-from basstler.stack.promotion_link import PromotionLink, PromotionLinkParameter
+from basstler.github.pull_request_form import PullRequestFormParameter
+from basstler.stack.promotion_link import PromotionLink
 
 from ..constants.stack import RemoteName, StackBranch, StackLabel
 
@@ -245,7 +246,7 @@ def test_the_link_compares_the_upstream_base_against_the_fork_branch():
     assert a_promotion_link().url.startswith(
         f"{StackRepository.UPSTREAM.value.url}/compare/{StackBranch.BASE}..."
         f"{StackRepository.FORK.value.owner}:{StackBranch.ENGINE}"
-        f"?{PromotionLinkParameter.EXPAND}=1"
+        f"?{PullRequestFormParameter.EXPAND}=1"
     )
 
 
@@ -259,10 +260,10 @@ def test_the_title_and_body_are_encoded_rather_than_pasted_in_raw():
         body=StackSampleText.BODY_WITH_FRAGMENT,
     )
 
-    assert prefilled(link.url, PromotionLinkParameter.TITLE) == (
+    assert prefilled(link.url, PullRequestFormParameter.TITLE) == (
         StackSampleText.TITLE_WITH_SEPARATORS
     )
-    assert prefilled(link.url, PromotionLinkParameter.BODY) == (
+    assert prefilled(link.url, PullRequestFormParameter.BODY) == (
         StackSampleText.BODY_WITH_FRAGMENT
     )
 
@@ -272,7 +273,7 @@ def test_a_body_within_the_limit_is_left_whole():
 
     assert not link.body_was_truncated
     assert (
-        prefilled(link.url, PromotionLinkParameter.BODY) == StackSampleText.SHORT_BODY
+        prefilled(link.url, PullRequestFormParameter.BODY) == StackSampleText.SHORT_BODY
     )
 
 

@@ -403,6 +403,27 @@ class MarkViewedSetup(TemplatePage):
             when there is none.
         """
         outcome = self.workflow_proposal(details).propose(client)
+        name = WorkflowLocation.MARK_VIEWED.name
+        if outcome.form_url:
+            self.steps.append(
+                SetupStep(
+                    description,
+                    SetupState.LEFT_TO_USER,
+                    f"its branch {ProposalBranch.MARK_VIEWED} holds it, but no pull "
+                    f"request could be opened: {outcome.failure}",
+                )
+            )
+            self.user_steps.append(
+                UserStep(
+                    f"open and merge the pull request adding {name}",
+                    (
+                        f"Open {outcome.form_url} - its title and description are "
+                        "filled in.",
+                        "Click Create pull request, review it, then merge it.",
+                    ),
+                )
+            )
+            return
         if outcome.pull_request is None:
             self.leave_installation(
                 description,
@@ -413,16 +434,23 @@ class MarkViewedSetup(TemplatePage):
             return
         url = outcome.pull_request.page_url
         found = "opened" if outcome.opened_now else "already open"
+        stacked = (
+            f", merging into {outcome.merges_into}: it reaches "
+            f"{details.default_branch} once that branch merges"
+            if outcome.merges_into
+            else ""
+        )
         self.steps.append(
             SetupStep(
                 description,
                 SetupState.LEFT_TO_USER,
-                f"pull request {url} adds it ({found}); merging it finishes this step",
+                f"pull request {url} adds it ({found}{stacked}); merging it finishes "
+                "this step",
             )
         )
         self.user_steps.append(
             UserStep(
-                f"merge the pull request adding {WorkflowLocation.MARK_VIEWED.name}",
+                f"merge the pull request adding {name}",
                 (f"Open {url}.", "Review it, then merge it."),
             )
         )

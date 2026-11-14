@@ -20,6 +20,7 @@ from basstler.github.client import (
     RepositoryWrite,
 )
 from basstler.github.pull_request import NewPullRequest
+from basstler.github.pull_request_form import PullRequestForm
 from basstler.github.web_page import WebPage
 from basstler.json_model import ValidatedJSONModel
 from basstler.repository import Repository
@@ -155,6 +156,38 @@ class OpenPullRequest(WebPage):
     """
 
 
+class PullRequestBranch(ValidatedJSONModel):
+    """
+    One end of a pull request: the branch it is opened from or merges into.
+    """
+
+    ref: str
+    """
+    The branch's name.
+    """
+
+    sha: str
+    """
+    The commit the branch points at.
+    """
+
+
+class ListedPullRequest(OpenPullRequest):
+    """
+    An open pull request as the repository's listing of them gives it.
+    """
+
+    head: PullRequestBranch
+    """
+    The branch it is opened from.
+    """
+
+    base: PullRequestBranch
+    """
+    The branch it merges into.
+    """
+
+
 # %% proposing the file
 
 
@@ -177,6 +210,18 @@ class ProposalOutcome:
     failure: str = ""
     """
     Why no pull request could be opened, empty otherwise.
+    """
+
+    form_url: str = ""
+    """
+    GitHub's form opening the pull request with everything filled in, when the branch
+    holds the file but the pull request could not be opened; empty otherwise.
+    """
+
+    merges_into: str = ""
+    """
+    The branch the pull request merges into, when it is another than the default
+    branch; empty otherwise.
     """
 
 
@@ -224,12 +269,20 @@ class FileProposal:
 
     def propose(self, client: GitHubAttemptClient) -> ProposalOutcome:
         """
-        Put the file on :attr:`branch` and open a pull request for it, unless one is
-        open already.
+        Find an open pull request carrying the file, else put the file on
+        :attr:`branch` and open a pull request for it, unless one is open already.
 
         :param client: Reads and writes the repository.
         :return: The pull request, or why none could be opened.
         """
+        carrying = self.open_pull_request_carrying(client)
+        if carrying is not None:
+            return ProposalOutcome(
+                carrying,
+                merges_into=(
+                    carrying.base.ref if carrying.base.ref != self.base else ""
+                ),
+            )
         listed = client.attempt_get(
             f"{self.repository.pull_requests_path}?state=open"
             f"&head={self.repository.owner}:{self.branch}"
@@ -255,8 +308,56 @@ class FileProposal:
             )
         )
         if opened.failure is not None:
-            return ProposalOutcome(failure=opened.failure.error_message())
+            link = PullRequestForm(
+                self.repository, self.base, self.branch, self.title, self.body
+            ).link
+            return ProposalOutcome(
+                failure=opened.failure.error_message(),
+                form_url="" if link is None else link.url,
+            )
         return ProposalOutcome(OpenPullRequest.from_json(opened.body), opened_now=True)
+
+    def open_pull_request_carrying(
+        self, client: GitHubAttemptClient
+    ) -> ListedPullRequest | None:
+        """
+        :param client: Reads the repository.
+        :return: The open pull request from another branch than :attr:`branch` whose
+            head holds the file with this content and which is not stacked on another
+            such pull request, ``None`` when none does or they cannot be read.
+        """
+        listed = client.attempt_get(
+            f"{self.repository.pull_requests_path}?state=open&per_page=100"
+        )
+        if listed.failure is not None:
+            return None
+        carrying = [
+            pull_request
+            for pull_request in map(ListedPullRequest.from_json, listed.body)
+            if pull_request.head.ref != self.branch
+            and self.held_by(client, pull_request)
+        ]
+        heads = {pull_request.head.ref for pull_request in carrying}
+        lowest = [
+            pull_request
+            for pull_request in carrying
+            if pull_request.base.ref not in heads
+        ]
+        return lowest[0] if lowest else None
+
+    def held_by(
+        self, client: GitHubAttemptClient, pull_request: ListedPullRequest
+    ) -> bool:
+        """
+        :param client: Reads the repository.
+        :param pull_request: An open pull request.
+        :return: Whether its head holds the file with this content.
+        """
+        held = client.attempt_get(self.contents_path(pull_request.head.sha))
+        return (
+            held.failure is None
+            and RepositoryFile.from_json(held.body).text == self.text
+        )
 
     def create_branch(self, client: GitHubAttemptClient) -> GitHubResponse | None:
         """
@@ -320,12 +421,12 @@ class FileProposal:
         """
         return f"{self.repository.api_path}/git/ref/heads/{branch}"
 
-    def contents_path(self, branch: str) -> str:
+    def contents_path(self, revision: str) -> str:
         """
-        :param branch: A branch of the repository.
-        :return: The REST path of the file on that branch.
+        :param revision: A branch or commit of the repository.
+        :return: The REST path of the file there.
         """
-        return f"{self.repository.api_path}/contents/{self.file}?ref={branch}"
+        return f"{self.repository.api_path}/contents/{self.file}?ref={revision}"
 
     @property
     def new_file_page(self) -> str:

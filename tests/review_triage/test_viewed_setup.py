@@ -19,6 +19,7 @@ from basstler.github.client import (
 )
 from basstler.github.file_proposal import FileUpdate, FileWrite, NewBranch
 from basstler.github.pull_request import NewPullRequest
+from basstler.github.pull_request_form import PullRequestForm
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.token_form import PermissionLevel, RepositoryPermission, TokenUse
 from basstler.locations import WorkflowLocation
@@ -115,6 +116,11 @@ class ForkAnswers(GitHubAttemptClient):
     The status every write is refused with, ``None`` to accept them.
     """
 
+    refused_writes: set[str] = field(default_factory=set)
+    """
+    The write paths refused as forbidden, whatever :attr:`write_refusal` is.
+    """
+
     sent: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
@@ -129,6 +135,8 @@ class ForkAnswers(GitHubAttemptClient):
 
     def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
         self.sent.append(write)
+        if write.path in self.refused_writes:
+            return refusal(HTTPStatus.FORBIDDEN, write.method, write.path)
         if self.write_refusal is not None:
             return refusal(self.write_refusal, write.method, write.path)
         return GitHubResponse(self.write_answers.get(write.path))
@@ -489,3 +497,104 @@ def test_a_stored_token_is_not_reported_as_left():
     setup = MarkViewedSetup(FORK)
     setup.run(answers())
     assert not setup.token_left
+
+
+# %% a pull request already carrying the workflow, or one that cannot be opened
+
+
+ALL_OPEN = f"{FORK.pull_requests_path}?state=open&per_page=100"
+"""
+The listing of every open pull request on the repository.
+"""
+
+
+def carrying_pull_request(base: str) -> dict[str, Any]:
+    """
+    :param base: The branch it merges into.
+    :return: An open pull request from another branch, as the listing gives it.
+    """
+    return {
+        "number": 9,
+        "html_url": f"{FORK.url}/pull/9",
+        "head": {"ref": "another-branch", "sha": "a-head-commit"},
+        "base": {"ref": base, "sha": "a-base-commit"},
+    }
+
+
+def carried_workflow(setup: MarkViewedSetup, base: str, text: str) -> ForkAnswers:
+    """
+    :param setup: The setup whose workflow another pull request holds.
+    :param base: The branch that pull request merges into.
+    :param text: The workflow file its head holds.
+    :return: A repository that is no fork, with that pull request open.
+    """
+    client = unforked_answers()
+    client.answers[ALL_OPEN] = [carrying_pull_request(base)]
+    client.answers[
+        setup.workflow_proposal(
+            RepositoryDetails.from_json(fork_details(is_fork=False))
+        ).contents_path("a-head-commit")
+    ] = {"sha": INSTALLED_BLOB, "content": base64.encodebytes(text.encode()).decode()}
+    return client
+
+
+def test_an_open_pull_request_carrying_the_workflow_is_reported_and_nothing_written():
+    setup = MarkViewedSetup(FORK)
+    default_branch = RepositoryDetails.from_json(WORKFLOW_REPOSITORY_DETAILS)
+    client = carried_workflow(
+        setup, default_branch.default_branch, setup.caller_workflow
+    )
+    setup.run(client)
+    assert (client.sent, setup.user_steps[0].browser_steps[0]) == (
+        [],
+        f"Open {carrying_pull_request('')['html_url']}.",
+    )
+
+
+def test_a_pull_request_carrying_another_version_is_not_taken_for_it():
+    setup = MarkViewedSetup(FORK)
+    client = carried_workflow(setup, "main", "another workflow\n")
+    setup.run(client)
+    assert (
+        len([write for write in client.sent if isinstance(write, NewPullRequest)]) == 1
+    )
+
+
+def test_a_carrying_pull_request_on_another_base_says_what_it_merges_into():
+    setup = MarkViewedSetup(FORK)
+    client = carried_workflow(setup, "a-stacked-base", setup.caller_workflow)
+    setup.run(client)
+    installed = f"the {WorkflowLocation.MARK_VIEWED.name} workflow on"
+    (reason,) = [
+        step.reason for step in setup.steps if step.description.startswith(installed)
+    ]
+    assert "merging into a-stacked-base" in reason
+
+
+def test_a_refused_pull_request_gets_the_form_with_everything_filled_in():
+    client = unforked_answers()
+    client.refused_writes.add(FORK.pull_requests_path)
+    setup = MarkViewedSetup(FORK)
+    setup.run(client)
+    proposal = setup.workflow_proposal(
+        RepositoryDetails.from_json(fork_details(is_fork=False))
+    )
+    expected = PullRequestForm(
+        FORK, proposal.base, proposal.branch, proposal.title, proposal.body
+    ).link
+    assert setup.user_steps[0].browser_steps[0].startswith(f"Open {expected.url} ")
+
+
+def test_of_two_stacked_pull_requests_carrying_the_workflow_the_lower_is_reported():
+    setup = MarkViewedSetup(FORK)
+    client = carried_workflow(setup, "a-stacked-base", setup.caller_workflow)
+    lower = carrying_pull_request("a-stacked-base")
+    upper = dict(
+        carrying_pull_request(lower["head"]["ref"]),
+        number=10,
+        html_url=f"{FORK.url}/pull/10",
+        head={"ref": "an-upper-branch", "sha": "a-head-commit"},
+    )
+    client.answers[ALL_OPEN] = [upper, lower]
+    setup.run(client)
+    assert setup.user_steps[0].browser_steps[0] == f"Open {lower['html_url']}."
