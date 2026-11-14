@@ -5,16 +5,13 @@ waits through.
 
 from __future__ import annotations
 
-from basstler.git.commands import ProposedPush
+from basstler.git.commands import IntegrationStrategy, ProposedPush
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.restack_steps import (
     BranchOutcome,
     RestackOutcome,
 )
-from basstler.stack.model import (
-    IntegrationStrategy,
-    PullRequest,
-)
+from basstler.stack.model import PullRequest
 
 from ..constants.stack import RemoteName, StackBranch
 from .fork import (
@@ -335,8 +332,11 @@ def test_replacing_a_merge_never_overwrites_a_push_the_pass_did_not_see(
 
 
 def test_replacing_superseded_merges_authorises_rewriting_published_history():
+    """
+    A merge that replaces superseded merges is pushed with a lease.
+    """
     replacing = ProposedPush.publishing(
-        make_configuration(),
+        make_configuration().fork_remote,
         "a-branch",
         IntegrationStrategy.MERGE,
         replaces_superseded_merges=True,

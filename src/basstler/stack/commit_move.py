@@ -9,8 +9,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from basstler.exit_codes import StackExitCode
+from basstler.git.commands import GitCommandRunner
 from basstler.stack.checkout import CurrentCheckout, GitArgument
 from basstler.stack.model import Stack
+from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -183,3 +185,34 @@ class CommitMoveChecks:
         for refusal in refusals:
             logger.error(f"{refusal.reason}: {refusal.explanation}")
         return StackExitCode.MOVE_REFUSED
+
+
+# %% asking git what contains what
+
+
+@dataclass(frozen=True)
+class BranchAncestry:
+    """
+    Answers containment questions about the fork's branches.
+
+    :class:`CommitMoveChecks` asks its false-merge question through this, so the
+    question is asked of git rather than of anything this module remembers.
+    """
+
+    configuration: Configuration
+    """
+    The resolved configuration naming the fork remote.
+    """
+
+    git: GitCommandRunner
+    """
+    The runner to ask git through.
+    """
+
+    def is_ancestor(self, candidate: str, descendant: str) -> bool:
+        """:param candidate: A fork branch that may be contained.
+        :param descendant: A local branch that may contain it.
+        :return: Whether the fork's copy of *candidate* is contained in *descendant*."""
+        return self.git.contains(
+            self.configuration.reference_on_fork(candidate), descendant
+        )

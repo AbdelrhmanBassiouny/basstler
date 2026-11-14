@@ -21,11 +21,8 @@ from cyclopts import App, Parameter
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
-from basstler.git.commands import (
-    GitCommandResult,
-    GitCommandRunner,
-    GitHubLoginLendingRunner,
-)
+from basstler.git.commands import GitCommandResult, GitCommandRunner
+from basstler.github.login_lending import GitHubLoginLendingRunner
 from basstler.git.remote_branch import RemoteBranch
 from basstler.github.client import (
     GitHubFullClient,

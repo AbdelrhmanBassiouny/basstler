@@ -33,13 +33,8 @@ from basstler.maintenance.restack_steps import (
     BranchOutcome,
     RestackOutcome,
 )
-from basstler.stack.model import (
-    IntegrationStrategy,
-    PullRequest,
-    SkippedPullRequest,
-    SkipReason,
-    Stack,
-)
+from basstler.stack.model import PullRequest, SkippedPullRequest, SkipReason, Stack
+from basstler.git.commands import IntegrationStrategy
 from basstler.stack.settings import Configuration
 
 from ..constants.stack import RemoteName, StackBranch

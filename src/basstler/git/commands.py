@@ -13,17 +13,14 @@ import subprocess
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePath, PurePosixPath
 
 from basstler.class_property import classproperty
 from basstler.environment import GitVariable
 from basstler.exceptions import ExternalCallFailed, UnresolvableReferenceError
 from basstler.exit_codes import CommandFailure, StackExitCode
-from basstler.github.constants import CommitTrailer
-from basstler.github.repository import GitHubAddress
 from basstler.locations import CommitScratchFile, RepositoryStateLocation
-from basstler.stack.model import IntegrationStrategy
-from basstler.stack.settings import Configuration
 
 # %% running git
 
@@ -124,7 +121,7 @@ class ProposedPush:
     @classmethod
     def publishing(
         cls,
-        configuration: Configuration,
+        remote: str,
         branch: str,
         strategy: IntegrationStrategy,
         replaces_superseded_merges: bool = False,
@@ -132,7 +129,7 @@ class ProposedPush:
         """
         Build the push that publishes a restacked branch.
 
-        :param configuration: The resolved configuration.
+        :param remote: The remote to publish to: the fork's.
         :param branch: The branch to publish.
         :param strategy: How its parent was integrated, which authorises a rewrite when
             it is a rebase - and which ``Stack.build`` sets to rebase only from the label.
@@ -142,7 +139,7 @@ class ProposedPush:
         :return: The push.
         """
         return cls(
-            remote=configuration.fork_remote,
+            remote=remote,
             refspec=f"{branch}:{branch}",
             with_lease=strategy is IntegrationStrategy.REBASE
             or replaces_superseded_merges,
@@ -473,59 +470,44 @@ class TransientGitSetting:
         }
 
 
-@dataclass(frozen=True)
-class GitHubLoginLendingRunner(GitCommandRunner):
+# %% commit trailers
+
+
+class CommitTrailer(StrEnum):
     """
-    Runs git in one checkout, answering its request for a GitHub credential over HTTPS
-    with ``gh``'s login, without changing any git configuration.
-    """
-
-    @classproperty
-    def credential_helper(cls) -> str:
-        """
-        The credential helper that answers with ``gh``'s login.
-        """
-        return "!gh auth git-credential"
-
-    def attempt(
-        self, *arguments: str, environment: Mapping[str, str] | None = None
-    ) -> GitCommandResult:
-        """
-        :meth:`GitCommandRunner.attempt`, with :attr:`credential_helper` consulted for
-        GitHub after every helper git is already configured with.
-        """
-        lent = TransientGitSetting(
-            f"credential.{GitHubAddress.WEB}.helper", self.credential_helper
-        ).variables(os.environ)
-        return super().attempt(*arguments, environment={**lent, **(environment or {})})
-
-
-# %% asking git what contains what
-
-
-@dataclass(frozen=True)
-class BranchAncestry:
-    """
-    Answers containment questions about the fork's branches.
-
-    :class:`CommitMoveChecks` asks its false-merge question through this, so the
-    question is asked of git rather than of anything this module remembers.
+    The trailer keys basstler writes into the commits it makes, and later recognises
+    those commits by.
     """
 
-    configuration: Configuration
+    RESTACKED_PARENT = "Restacked-parent"
     """
-    The resolved configuration naming the fork remote.
-    """
-
-    git: GitCommandRunner
-    """
-    The runner to ask git through.
+    Names the parent a restack merged in, marking the merge as the restack's own rather
+    than one a person made.
     """
 
-    def is_ancestor(self, candidate: str, descendant: str) -> bool:
-        """:param candidate: A fork branch that may be contained.
-        :param descendant: A local branch that may contain it.
-        :return: Whether the fork's copy of *candidate* is contained in *descendant*."""
-        return self.git.contains(
-            self.configuration.reference_on_fork(candidate), descendant
-        )
+    RESTACKED_PARENT_COMMIT = "Restacked-parent-commit"
+    """
+    The commit of the parent a restack merged in, which a restack's own merge records as
+    its second parent.
+    """
+
+    ACTION_REQUEST = "Basstler-request"
+    """
+    The identifier of the upstream-reviews request whose branch the commit is on,
+    marking the branch as basstler's own rather than one a person made.
+    """
+
+
+# %% integrating a moved parent
+
+
+class IntegrationStrategy(StrEnum):
+    """How a branch integrates its parent's moved tip during a restack."""
+
+    MERGE = "merge"
+    """Merge the parent's tip in, replacing the merges earlier restacks left that only
+    brought in an older state of the parent, so the branch carries one such merge."""
+
+    REBASE = "rebase"
+    """Replay the branch onto the parent's tip, which rewrites published history and is
+    authorised only by the branch's own rebase label."""

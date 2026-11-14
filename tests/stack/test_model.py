@@ -21,11 +21,11 @@ from basstler.stack.exceptions import BaseBranchScopeError
 from basstler.stack.model import (
     BoardKey,
     BranchStatus,
-    IntegrationStrategy,
     PullRequest,
     RestackPlanEntry,
     Stack,
 )
+from basstler.git.commands import IntegrationStrategy
 
 from ..constants.stack import StackBranch, StackLabel
 from .dataset import (

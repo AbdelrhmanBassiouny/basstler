@@ -29,13 +29,13 @@ from basstler.maintenance.upstream_pull_request_synchronization import (
     UpstreamPullRequestSynchronizationChange,
 )
 from basstler.stack.model import (
-    IntegrationStrategy,
     PullRequest,
     Reparent,
     SkippedPullRequest,
     SkipReason,
     Stack,
 )
+from basstler.git.commands import IntegrationStrategy
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch

@@ -11,8 +11,8 @@ from dataclasses import replace
 import pytest
 
 from basstler.exit_codes import StackExitCode
-from basstler.git.commands import GitCommandFailed, ProposedPush
-from basstler.git.commit_move import RefusalReason
+from basstler.git.commands import GitCommandFailed, IntegrationStrategy, ProposedPush
+from basstler.stack.commit_move import RefusalReason
 from basstler.maintenance.commands import RestackCommand
 from basstler.maintenance.fast_forward import (
     FastForwardOutcome,
@@ -25,10 +25,7 @@ from basstler.maintenance.restack_steps import (
     RestackOutcome,
     TellTheBranchOwner,
 )
-from basstler.stack.model import (
-    IntegrationStrategy,
-    PullRequest,
-)
+from basstler.stack.model import PullRequest
 
 from ..constants.stack import RemoteName, StackBranch, StackLabel
 from .fork import (
@@ -292,10 +289,10 @@ def test_only_the_rebase_strategy_authorises_rewriting_published_history():
     configuration = make_configuration()
 
     merging = ProposedPush.publishing(
-        configuration, "a-branch", IntegrationStrategy.MERGE
+        configuration.fork_remote, "a-branch", IntegrationStrategy.MERGE
     )
     rebasing = ProposedPush.publishing(
-        configuration, "a-branch", IntegrationStrategy.REBASE
+        configuration.fork_remote, "a-branch", IntegrationStrategy.REBASE
     )
 
     assert not merging.with_lease

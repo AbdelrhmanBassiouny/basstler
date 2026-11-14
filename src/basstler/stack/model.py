@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.git.commands import IntegrationStrategy
 from basstler.git.branch import Branch
 from basstler.github.repository import Repository
 from basstler.github.states import CombinedCheckState
@@ -62,18 +63,6 @@ class BranchStatus(StrEnum):
         if in_review:
             return cls.IN_REVIEW
         return cls.DRAFT if draft else cls.READY
-
-
-class IntegrationStrategy(StrEnum):
-    """How a branch integrates its parent's moved tip during a restack."""
-
-    MERGE = "merge"
-    """Merge the parent's tip in, replacing the merges earlier restacks left that only
-    brought in an older state of the parent, so the branch carries one such merge."""
-
-    REBASE = "rebase"
-    """Replay the branch onto the parent's tip, which rewrites published history and is
-    authorised only by the branch's own rebase label."""
 
 
 class SkipReason(StrEnum):

@@ -18,12 +18,9 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.command_line import Command
 from basstler.exit_codes import StackExitCode
-from basstler.git.commands import (
+from basstler.git.commands import GitCommandRunner, ProposedPush
+from basstler.stack.commit_move import (
     BranchAncestry,
-    GitCommandRunner,
-    ProposedPush,
-)
-from basstler.git.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,
