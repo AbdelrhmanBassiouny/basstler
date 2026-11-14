@@ -176,7 +176,7 @@ class ItemBrief:
                 plan,
                 item.identifier,
                 pull_request_source.live_pull_requests_of(
-                    DependencyResolver(plan, plan_directory)
+                    DependencyResolver(plan, plan_directory).pull_request_references
                 ),
                 plan_directory,
             )

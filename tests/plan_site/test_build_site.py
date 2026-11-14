@@ -253,8 +253,11 @@ def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
 def test_live_pull_requests_leave_out_a_number_the_repository_does_not_have(
     pull_request_source: RecordedPullRequestSource,
 ):
+    """
+    A pull request number its repository does not have is not in the live state.
+    """
     live_pull_requests = pull_request_source.live_pull_requests_of(
-        DependencyResolver(FIRST_PLAN)
+        DependencyResolver(FIRST_PLAN).pull_request_references
     )
     assert live_pull_requests.pull_requests_by_repository == {
         str(PLAN_REPOSITORY): {

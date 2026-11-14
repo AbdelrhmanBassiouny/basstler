@@ -198,13 +198,18 @@ def test_github_source_answers_none_for_a_pull_request_on_a_repository_it_cannot
 
 
 def test_github_source_finds_a_repository_whose_details_are_refused_unreadable():
+    """
+    A repository whose details are refused is a read failure, not a pull request.
+    """
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
             responses=details_of(PLAN_REPOSITORY),
             pages={listing_path(PLAN_REPOSITORY): [[]]},
         )
     )
-    live_pull_requests = source.live_pull_requests_of(DependencyResolver(FIRST_PLAN))
+    live_pull_requests = source.live_pull_requests_of(
+        DependencyResolver(FIRST_PLAN).pull_request_references
+    )
     assert list(live_pull_requests.read_failures) == [ELSEWHERE_PULL_REQUEST.repository]
 
 

@@ -444,6 +444,20 @@ class DependencyResolver:
             if isinstance(dependency, ResolvedDependency)
         ]
 
+    @property
+    def pull_request_references(self) -> list[PullRequestReference]:
+        """
+        The pull request of every resolved dependency's item that has one.
+        """
+        return [
+            PullRequestReference(
+                Repository.parse(dependency.repository),
+                dependency.item.pull_request_number,
+            )
+            for dependency in self.resolved_dependencies
+            if dependency.item.pull_request_number is not None
+        ]
+
     def dependencies_of(self, item: Item) -> list[Dependency]:
         """
         Resolve one item's whole ``depends_on``.

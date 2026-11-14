@@ -371,7 +371,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
         live_pull_requests = self.pull_request_source.live_pull_requests_of(
-            dependencies
+            dependencies.pull_request_references
         )
         for repository, failure in live_pull_requests.read_failures.items():
             logger.warning(
