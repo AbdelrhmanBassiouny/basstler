@@ -33,20 +33,20 @@ items:
   branch: ccr-37402cb7-cls5ht-keyword-arguments
   session: https://claude.ai/code/session_01JxHGiQ6QwrU1DCxnD3WaYc
   pull_request_number: 214
-  notes: 'Draft #214, stacked on #213: signature-checked keyword-argument judgment (tree
-    matcher with rules and findings; calls resolved by name, through the class hierarchy,
-    and through declared attribute and parameter types) and a module-move rename source.
-    CRAM #967: 123 of 154 files mechanical; #210: 194 of 246.'
+  notes: 'Draft #214, stacked on #213: signature-checked keyword-argument judgment, and
+    rename sources for module moves, definitions moved between modules and moved file
+    paths in prose; relative imports resolved per file, templates and empty package
+    initializers judged. CRAM #967: 123 of 154 files mechanical; #210: 233 of 246.'
 
 - id: viewed-marking-workflow
-  title: Mark files viewed from a repository's Actions, for cloud sessions
+  title: Mark files viewed on every pull request, from Actions or your own computer
   track: triage
   depends_on: [mechanical-file-triage]
   status: in progress
   branch: ccr-37402cb7-cls5ht-viewed-workflow
   session: https://claude.ai/code/session_01JxHGiQ6QwrU1DCxnD3WaYc
   pull_request_number: 215
-  notes: 'Draft #215, stacked on #213: request-mark-viewed dispatches a dispatch-only
-    workflow calling a reusable one that runs mark-viewed with the user''s
-    REVIEW_TRIAGE_VIEWER_TOKEN, refusing a run started by anyone else; SETUP section 4
-    offers it beside running mark-viewed where gh is logged in.'
+  notes: 'Draft #215, stacked on #213: set-up-mark-viewed installs the workflow (on
+    every pull request with --on-every-pull-request), turns Actions on for forks and
+    lists the token steps left; mark-viewed falls back to Actions and names both routes
+    and the README when neither works. Waits on the user storing the token.' 
