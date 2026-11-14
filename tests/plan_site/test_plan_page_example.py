@@ -9,14 +9,14 @@ import json
 
 import yaml
 
+from basstler.github.pull_request_state import (
+    LivePullRequests,
+    PullRequestRecord,
+)
 from basstler.plan.model import ItemStatus
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.plan import Plan
 from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
-from basstler.pull_request_state import (
-    PullRequestRecord,
-)
-from basstler.pull_request_state import LivePullRequests
 
 from .plan_page_builders import (
     EXAMPLE_DIRECTORY,

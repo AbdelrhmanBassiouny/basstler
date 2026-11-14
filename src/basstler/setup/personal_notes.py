@@ -30,15 +30,15 @@ from basstler.email_address import EmailAddress
 from basstler.environment import GitHubCredentialVariable
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import CommandFailure, PersonalNotesSetupExitCode
-from basstler.github_labels import GitHubLabel
+from basstler.git.commands import TransientGitSetting
+from basstler.github.client import GitHubRestClient
+from basstler.github.repository_access import GitHubRepository
+from basstler.github.tooling_labels import GitHubLabel
 from basstler.locations import (
     ClaudeCodeVariable,
     PluginLocation,
     PluginSkillLocation,
 )
-from basstler.github.client import GitHubRestClient
-from basstler.maintenance.git_commands import TransientGitSetting
-from basstler.maintenance.github import GitHubRepository
 from basstler.plugin_root import PluginRoot
 from basstler.setup.exceptions import ForeignNotesRemoteError, HookScriptFailedError
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport

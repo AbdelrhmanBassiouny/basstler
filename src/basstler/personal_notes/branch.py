@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from collections.abc import Mapping
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
@@ -21,7 +21,7 @@ from basstler.exceptions import (
     NotesPushRejectedError,
     UnsafeNotesPathError,
 )
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.git.commands import GitCommandRunner
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import FetchedBranchReference
 

@@ -13,7 +13,10 @@ from pathlib import Path
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.pull_request import NewPullRequest
-from basstler.maintenance.board import PullRequestField
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.repository import GitHubAddress, PullRequestReference
 from basstler.plan.item_bootstrap.documents import PlanDocuments, ProjectCheckout
 from basstler.plan.item_bootstrap.exceptions import (
     BranchAlreadyPublishedError,
@@ -26,7 +29,6 @@ from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
 )
-from basstler.repository import GitHubAddress, PullRequestReference
 
 # %% opening the work
 

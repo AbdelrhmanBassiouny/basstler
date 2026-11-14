@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import pytest
 
+from basstler.github.pull_request_state import LiveState
+from basstler.github.states import CombinedCheckState
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.chip_tone import ChipTone
-from basstler.pull_request_state import LiveState
-from basstler.github.states import CombinedCheckState
 
 # %% chip tones
 

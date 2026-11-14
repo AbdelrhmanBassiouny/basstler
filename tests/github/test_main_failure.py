@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 import yaml
 
+from basstler.github import main_failure
 from basstler.github.client import GitHubResponse, GitHubWrite
 from basstler.github.issue import (
     ClosingReason,
@@ -19,15 +20,14 @@ from basstler.github.issue import (
     IssueComment,
     NewIssue,
 )
-from basstler.github.workflow_run import RunJobPage, WorkflowRun
-from basstler.github_labels import GitHubLabel
-from basstler import main_failure
-from basstler.main_failure import FinishedRun, MainFailureTracker
-from basstler.repository import Repository
+from basstler.github.main_failure import FinishedRun, MainFailureTracker
+from basstler.github.repository import Repository
 from basstler.github.states import CheckOutcome
+from basstler.github.tooling_labels import GitHubLabel
+from basstler.github.workflow_run import RunJobPage, WorkflowRun
 
-from .constants.paths import DatasetLocation, RepositoryLocation
-from .github.recorded_client import RecordedGitHubClient
+from ..constants.paths import DatasetLocation, RepositoryLocation
+from ..github.recorded_client import RecordedGitHubClient
 
 # %% a repository whose issues are recorded
 

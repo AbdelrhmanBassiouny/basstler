@@ -5,9 +5,9 @@ look up.
 
 from __future__ import annotations
 
+from basstler.github.repository import PullRequestReference, Repository
 from basstler.plan_site.__main__ import PlanSource
 from basstler.plan_site.plan import Plan
-from basstler.repository import PullRequestReference, Repository
 
 from ..constants.site import SitePlan
 

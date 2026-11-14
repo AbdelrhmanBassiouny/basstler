@@ -45,16 +45,16 @@ from typing import Annotated
 from cyclopts import App, Parameter, Token
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
-from basstler.locations import RepositoryStateLocation
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.stack.merge_probe import MergeProbe
-from basstler.repository import Repository
-from basstler.stack.commit_move import (
+from basstler.git.commands import GitCommandRunner
+from basstler.git.commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
     ProposedCommitMove,
 )
+from basstler.github.repository import Repository
+from basstler.locations import RepositoryStateLocation
 from basstler.stack.label_write import LabelWrite
+from basstler.stack.merge_probe import MergeProbe
 from basstler.stack.model import Stack
 from basstler.stack.promotion_link import PromotionLink
 from basstler.stack.report import StackReport

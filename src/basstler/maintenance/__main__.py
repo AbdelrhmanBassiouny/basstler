@@ -37,9 +37,9 @@ import sys
 from pathlib import Path
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.git.commands import GitCommandRunner
 from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.commands import MaintenanceCommand, MaintenancePass
-from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.upstream_action import UpstreamReadRoute
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler

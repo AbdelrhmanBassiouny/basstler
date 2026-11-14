@@ -11,8 +11,7 @@ from pathlib import Path
 import pytest
 
 from basstler.plan.dependencies import DependencyReference
-from basstler.plan.model import PlanDocument
-from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
+from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
 from basstler.plan.size_limits import (
     DocumentLocation,
     DocumentOverLimitError,

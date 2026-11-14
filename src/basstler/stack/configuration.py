@@ -19,8 +19,8 @@ from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.github.repository import Repository
 from basstler.locations import PackageLocation, ProjectLocation
-from basstler.repository import Repository
 
 
 class StackSetting(StrEnum):

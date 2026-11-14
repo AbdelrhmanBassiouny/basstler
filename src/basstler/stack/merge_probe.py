@@ -13,7 +13,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import StackExitCode
-from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
+from basstler.git.commands import GitCommandFailed, GitCommandRunner
 from basstler.stack.checkout import GitArgument, MergeTreeStatus
 from basstler.stack.report import MergeVerdict
 from basstler.standard_streams import StandardStreamHandler

@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 
 from basstler.bash import Bash
+from basstler.github.repository import Repository
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.item_bootstrap.exceptions import (
@@ -33,7 +34,6 @@ from basstler.plan.model import (
     PlanManifest,
 )
 from basstler.plugin_root import PluginRoot
-from basstler.repository import Repository
 from basstler.shell_configuration import (
     FetchedBranchReference,
     ShellConfigurationFunction,

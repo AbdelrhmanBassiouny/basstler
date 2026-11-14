@@ -8,14 +8,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from basstler.maintenance.board import PullRequestField
-from basstler.maintenance.description import (
+from basstler.github.pull_request_description import (
     PullRequestDescription,
     UpstreamPullRequestLink,
 )
-from basstler.maintenance.github import ForkPullRequests
+from basstler.github.pull_request_record import (
+    PullRequestField,
+)
+from basstler.github.repository_access import ForkPullRequests
 from basstler.stack.label_write import LabelWrite
-from basstler.stack.model import StackBranch, BranchStatus, Stack
+from basstler.stack.model import BranchStatus, Stack, StackBranch
 
 
 class UpstreamPullRequestSynchronizationAction(StrEnum):

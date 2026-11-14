@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.repository import Repository
+from basstler.github.repository import Repository
 from basstler.upstream_reviews.action.exchange import (
     ActionRequest,
     ActionRequestKind,

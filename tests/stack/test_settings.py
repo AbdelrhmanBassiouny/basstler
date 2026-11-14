@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from basstler.repository import Repository
+from basstler.github.repository import Repository
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.stack.configuration import StackSetting
 from basstler.stack.exceptions import (
     AmbiguousForkRemoteError,
@@ -26,18 +27,14 @@ from basstler.stack.settings import (
     RemoteResolution,
 )
 
-from basstler.locations import PackageLocation, ProjectLocation
-
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
 from ..scratch_repository import ScratchRepository
-
 from .dataset import (
     StackRepository,
     StackSampleText,
     make_configuration,
 )
-
 
 # %% configuration layering (personal-notes overrides)
 

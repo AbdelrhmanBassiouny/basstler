@@ -5,12 +5,12 @@ and their chips.
 
 from __future__ import annotations
 
-from basstler.plan.model import ItemStatus
-from basstler.pull_request_state import (
+from basstler.github.pull_request_state import (
     LiveState,
     PullRequestRecord,
     PullRequestState,
 )
+from basstler.plan.model import ItemStatus
 
 from ..fixture_plans import (
     FixturePlanId,

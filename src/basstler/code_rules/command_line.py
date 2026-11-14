@@ -5,7 +5,6 @@ The ``basstler code-rules`` commands: checking code against the rules, and gener
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from cyclopts import App
@@ -15,13 +14,13 @@ from basstler.code_rules.checker import CodeRulesCheck, StagedLines
 from basstler.code_rules.commands import CodeRulesCommand
 from basstler.code_rules.instructions import AgentsInstructions
 from basstler.code_rules.package_boundaries import (
+    PackageAtCommit,
     PackageBoundaryChecker,
-    PackageCrossings,
 )
 from basstler.code_rules.rule_module import RuleModule
 from basstler.exit_codes import ExitCode
+from basstler.git.commands import GitCommandRunner
 from basstler.locations import ProjectLocation
-from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -78,28 +77,27 @@ def check(
     return CodeRulesExitCode.SUCCESS
 
 
-@code_rules_app.command(name=CodeRulesCommand.CROSSINGS)
-def list_crossings(output: Path) -> CodeRulesExitCode:
-    """
-    Write every import of the package that crosses a distribution boundary to *output*.
-
-    :param output: The JSON file to write the crossings to.
-    """
-    crossings = PackageBoundaryChecker().package_crossings()
-    output.write_text(json.dumps(crossings.to_json(), indent=2) + "\n")
-    logger.info("Wrote %d crossings to %s", len(crossings.crossings), output)
-    return CodeRulesExitCode.SUCCESS
-
-
 @code_rules_app.command(name=CodeRulesCommand.NEW_CROSSINGS)
-def report_new_crossings(base: Path) -> CodeRulesExitCode:
+def report_new_crossings(base_commit: str) -> CodeRulesExitCode:
     """
-    Report each boundary crossing of the package that the base checkout does not have.
+    Report each boundary crossing of the package that *base_commit* does not have.
 
-    :param base: The listing :func:`list_crossings` wrote in the base checkout.
+    The base is read under its own package map, so a crossing only a change of the map
+    creates is new as well; a module moved since keeps the base's crossings.
+
+    :param base_commit: The commit the checked out package is compared with.
     """
-    base_crossings = PackageCrossings.from_json(json.loads(base.read_text()))
-    added = PackageBoundaryChecker().package_crossings().added_since(base_crossings)
+    git = GitCommandRunner(Path.cwd())
+    checker = PackageBoundaryChecker()
+    with PackageAtCommit(git, base_commit, checker.package_directory) as base_checker:
+        if base_checker is None:
+            logger.info(
+                "%s declares no package map, so nothing is compared", base_commit
+            )
+            return CodeRulesExitCode.SUCCESS
+        base_crossings = base_checker.package_crossings()
+    renames = checker.module_renames(git, base_commit)
+    added = checker.package_crossings().added_since(base_crossings.renamed(renames))
     for crossing in added:
         logger.error(
             "basstler.%s newly imports basstler.%s across a distribution boundary; "

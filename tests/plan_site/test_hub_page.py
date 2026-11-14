@@ -4,7 +4,6 @@ Tests for plan_site/hub_page.py's cards: a plan's progress on its repository's i
 
 from __future__ import annotations
 
-
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.hub_page import CountedItem, PlanSummary, StageShare
 from basstler.plan_site.plan import Plan, ProgressStage

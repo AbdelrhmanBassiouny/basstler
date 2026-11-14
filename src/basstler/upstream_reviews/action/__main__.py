@@ -31,19 +31,21 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import ExitCode
-from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
-from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.repository import Repository
+from basstler.git.commands import GitCommandFailed, GitCommandRunner
+from basstler.git.remote_branch import RemoteBranch
+from basstler.github.client import GitHubRestClient
+from basstler.github.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import (
     AbandonedRequests,
+    ActionBranch,
+    ActionFile,
     ActionInstallation,
 )
 from basstler.upstream_reviews.action.read import (
     ActionRead,
 )
 from basstler.upstream_reviews.action.run import ActionRun
-from basstler.github.client import GitHubRestClient
 from basstler.upstream_reviews.exceptions import (
     ActionUnavailable,
     UpstreamReadError,
@@ -51,7 +53,6 @@ from basstler.upstream_reviews.exceptions import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

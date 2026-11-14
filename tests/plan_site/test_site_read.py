@@ -12,6 +12,7 @@ import pytest
 from basstler.github.client import HttpMethod
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubCredentialRejected
+from basstler.github.repository import GitHubAddress, Repository
 from basstler.plan_site.build_start import SiteAccess
 from basstler.plan_site.exceptions import SiteRepositoryUnreachableError
 from basstler.plan_site.site_read import (
@@ -21,7 +22,6 @@ from basstler.plan_site.site_read import (
     RepositoryAttachmentFix,
 )
 from basstler.plan_site.site_repository import SiteRepository
-from basstler.repository import GitHubAddress, Repository
 
 # %% the site repository and a refusal of it
 

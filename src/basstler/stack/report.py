@@ -10,7 +10,7 @@ from enum import StrEnum
 
 from basstler.class_property import classproperty
 from basstler.stack.checkout import CurrentCheckout, GitArgument, MergeTreeStatus
-from basstler.stack.model import StackBranch, BranchStatus, Stack
+from basstler.stack.model import BranchStatus, Stack, StackBranch
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

@@ -5,22 +5,22 @@ cards, links and counts.
 
 from __future__ import annotations
 
-from basstler.plan_site.cards import TrackSection
-from ..fixture_plans import ForeignItemId, foreign_reference
-
-from basstler.maintenance.description import UpstreamPullRequestLink
-from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Plan, Track, Wave
-from basstler.plan_site.plan_page import PlanPage
-from basstler.pull_request_state import (
+from basstler.github.pull_request_description import UpstreamPullRequestLink
+from basstler.github.pull_request_state import (
+    LivePullRequests,
     PullRequestRecord,
     PullRequestState,
 )
-from basstler.repository import Repository
-from basstler.pull_request_state import LivePullRequests
+from basstler.github.repository import Repository
+from basstler.plan.model import ItemStatus
+from basstler.plan_site.cards import TrackSection
+from basstler.plan_site.plan import Plan, Track, Wave
+from basstler.plan_site.plan_page import PlanPage
 
 from ..fixture_plans import (
     PLAN_UNDER_TEST_ID,
+    ForeignItemId,
+    foreign_reference,
 )
 from .plan_page_builders import (
     STYLESHEET_URL,

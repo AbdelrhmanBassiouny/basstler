@@ -11,29 +11,26 @@ import pytest
 
 import basstler.stack.__main__
 from basstler.exit_codes import StackExitCode
+from basstler.github.states import CombinedCheckState
+from basstler.locations import ProjectLocation
+from basstler.stack.__main__ import Command, CommandOption
 from basstler.stack.configuration import StackSetting
 from basstler.stack.exceptions import OwnRemoteNotFoundError
-from basstler.stack.__main__ import Command, CommandOption
-from basstler.stack.promotion_link import PromotionLink
 from basstler.stack.model import PullRequest
+from basstler.stack.promotion_link import PromotionLink
 from basstler.stack.report import StackReport, StatusColumn
 from basstler.stack.settings import PrintedConfiguration
-
-from basstler.locations import ProjectLocation
-from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
 from ..scratch_repository import ScratchRepository
 from ..script_runner import PythonModuleRunner
-
 from .dataset import (
     StackRepository,
     StackSampleText,
     build,
     make_configuration,
 )
-
 
 # %% the command line a caller acts on the exit status of
 

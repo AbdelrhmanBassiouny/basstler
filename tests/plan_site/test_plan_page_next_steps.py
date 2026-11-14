@@ -6,12 +6,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from basstler.plan.model import ItemStatus
-from basstler.pull_request_state import (
+from basstler.github.pull_request_state import (
     LiveState,
     PullRequestRecord,
     PullRequestState,
 )
+from basstler.plan.model import ItemStatus
 
 from .plan_page_builders import (
     item,

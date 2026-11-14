@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.plan_site.plan_page import PlanPage
+from basstler.locations import PackageLocation, SiteTemplate
 from basstler.plan_site.hub_page import HubPage
-from basstler.locations import PackageLocation
-from basstler.locations import SiteTemplate
+from basstler.plan_site.plan_page import PlanPage
 from basstler.render_common import (
     TemplatePage,
     create_template_environment,

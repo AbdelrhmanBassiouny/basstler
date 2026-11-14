@@ -108,9 +108,9 @@ next to the workflow it describes, because it is read rather than run.
   over every open branch's checks) and `run-report` (the whole pass, ending in a size-bounded
   finish summary with the full report in a file, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
-  long file: `maintenance/constants.py` (every value edited by hand),
-  `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/description.py`,
-  `maintenance/github.py`,
+  long file: `github/constants.py` (every value edited by hand),
+  `git/commands.py`, `maintenance/board.py`, `github/pull_request_description.py`,
+  `github/repository_access.py`,
   `maintenance/fast_forward.py`, `maintenance/restack_steps.py` and
   `maintenance/restack_procedure.py` (the steps, and the order that is the procedure),
   `maintenance/promotion.py`, `maintenance/promotion_context.py`,
