@@ -1,14 +1,11 @@
 **Plan**
-- Move the plan validation problems into plan.exceptions
-- git: CommitTrailer and IntegrationStrategy into git; GitHubLoginLendingRunner into github; BranchAncestry and commit_move into stack; publishing takes the remote
-- RemoteBranch.repository/description into a github subclass
-- UpstreamReadError and GraphQLErrorsReturned into github.exceptions; the open-pull-requests request into upstream_reviews; the upstream setting into github
-- live_pull_requests_of takes references
-- Plan model into basstler.plan, with a hub-side card for the render fields
-- Reorder the layers so notes sits below plan; update the standing rule; post the follow-up split item on #151
+- Remove every boundary crossing on main by moving code into the distribution that owns it
 
 **Done**
-- Draft PR #217 opened; item recorded as in progress
+- All 18 crossings removed; new-crossings origin/main passes at b62be2f8
+- main merged in (#211's promotion button now on ItemCard)
+- Plan updated: layer rule (notes below plan), item narrowed, split-shared-modules added; posted on #151
+- Full suite: 2699 passed; the 32 Playwright tests could not launch a browser in the sandbox
 
 **Next**
-- First move: the plan validation problems
+- Read CI on #217 when prompted; review
