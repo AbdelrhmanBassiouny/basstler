@@ -148,6 +148,17 @@ class ViewedMarking(TriageOutput):
     """
 
     def publish(self, triage: PullRequestTriage) -> None:
+        refusals = self.refusals(triage)
+        if refusals:
+            raise GraphQLMutationRefused(refusals)
+
+    def refusals(self, triage: PullRequestTriage) -> tuple[str, ...]:
+        """
+        Mark the mechanical files viewed, stopping at the first refusal.
+
+        :param triage: The triaged pull request.
+        :return: What GitHub refused with, empty once every file is marked.
+        """
         document = ReviewTriageLocation.MARK_FILE_AS_VIEWED.read_text()
         for file in triage.mechanical_files:
             variables = ViewedFile(
@@ -157,9 +168,8 @@ class ViewedMarking(TriageOutput):
                 GraphQLMutation(document, variables.to_json())
             )
             if response.failure is not None:
-                raise GraphQLMutationRefused((response.failure.error_message(),))
+                return (response.failure.error_message(),)
             answer = GraphQLAnswer.from_json(response.body)
             if answer.errors:
-                raise GraphQLMutationRefused(
-                    tuple(error.message for error in answer.errors)
-                )
+                return tuple(error.message for error in answer.errors)
+        return ()

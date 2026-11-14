@@ -1,0 +1,42 @@
+# Installed by `basstler review-triage set-up-mark-viewed`. It marks a pull request's
+# mechanical files viewed for the owner of the token stored as {{ token_secret }};
+# `basstler review-triage mark-viewed` starts it where it cannot mark them itself. Both
+# references below follow basstler's {{ branch_or_tag }}; to pin a release, use its tag.
+name: Mark viewed
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: "The number of the pull request whose mechanical files to mark viewed"
+        required: true
+        type: string
+      repository:
+        description: "The owner/name repository the pull request is opened on"
+        required: true
+        type: string
+{% if every_pull_request %}
+  # Every pull request opened or updated here, since GitHub clears "Viewed" from a file
+  # that changes again. pull_request_target hands the secret to pull requests from
+  # forks too; the run reads their commits but runs none of their code.
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+{% endif %}
+
+concurrency:
+  group: mark-viewed-{{ '${{' }} inputs.pull_request || github.event.pull_request.number {{ '}}' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mark:
+    uses: {{ basstler_repository }}/{{ reusable_workflow }}@{{ branch_or_tag }}
+    with:
+      basstler_branch_or_tag: {{ branch_or_tag }}
+      pull_request: {{ '${{' }} format('{0}', inputs.pull_request || github.event.pull_request.number) {{ '}}' }}
+      repository: {{ '${{' }} inputs.repository || github.repository {{ '}}' }}
+      started_by_person: {{ '${{' }} github.event_name == 'workflow_dispatch' {{ '}}' }}
+    secrets:
+      viewer_token: {{ '${{' }} secrets.{{ token_secret }} {{ '}}' }}

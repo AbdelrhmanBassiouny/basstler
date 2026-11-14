@@ -3,11 +3,12 @@ name: Review triage mark viewed
 # Marks a pull request's mechanical files viewed for the account whose token the caller
 # passes. "Viewed" is kept per account and only GitHub's GraphQL API sets it, which a
 # Claude Code cloud session cannot reach, so a session asks for this run instead
-# (basstler review-triage request-mark-viewed).
+# (basstler review-triage mark-viewed falls back to it; request-mark-viewed asks
+# directly).
 #
-# Reusable: a repository calls it from a dispatch-only workflow of its own, copied from
-# docs/examples/mark-viewed.yml, which passes the token stored in its
-# REVIEW_TRIAGE_VIEWER_TOKEN secret.
+# Reusable: a repository calls it from a dispatch-only workflow of its own, which
+# basstler review-triage set-up-mark-viewed installs and which passes the token stored
+# in its REVIEW_TRIAGE_VIEWER_TOKEN secret.
 
 on:
   workflow_call:
@@ -24,6 +25,11 @@ on:
         description: "The owner/name repository the pull request is opened on"
         required: true
         type: string
+      started_by_person:
+        description: "Whether a person started the run, rather than a pull request event"
+        required: false
+        default: true
+        type: boolean
     secrets:
       viewer_token:
         description: "A token of the account the files are marked viewed for"
@@ -40,7 +46,9 @@ jobs:
     steps:
       # The token marks files viewed for its own account, so only the account that
       # started the run may use it; anyone else would mark them for the token's owner.
+      # A run a pull request event starts marks them for the owner, as it set up.
       - name: Check the token belongs to whoever started the run
+        if: inputs.started_by_person
         env:
           GH_TOKEN: ${{ secrets.viewer_token }}
         run: |
@@ -52,6 +60,8 @@ jobs:
           fi
 
       # The triage compares the pull request's commits, so it reads them with history.
+      # It checks out the base repository, never the pull request's code, and runs
+      # none of it, so a pull_request_target caller is safe.
       - uses: actions/checkout@v4
         with:
           repository: ${{ inputs.repository }}
@@ -73,4 +83,4 @@ jobs:
           REPOSITORY: ${{ inputs.repository }}
         run: >-
           python -m basstler review-triage mark-viewed "$PULL_REQUEST"
-          --repository "$REPOSITORY" >> "$GITHUB_STEP_SUMMARY"
+          --repository "$REPOSITORY" --directly >> "$GITHUB_STEP_SUMMARY"

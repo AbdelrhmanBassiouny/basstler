@@ -36,6 +36,11 @@ class ReviewTriageCommand(StrEnum):
     Ask a repository's Actions to mark a pull request's mechanical files viewed.
     """
 
+    SET_UP_MARK_VIEWED = "set-up-mark-viewed"
+    """
+    Set a repository's Actions up to mark files viewed, listing the steps left.
+    """
+
     @property
     def invocation(self) -> str:
         """

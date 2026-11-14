@@ -266,6 +266,21 @@ class ReviewTriageLocation(PathEnumeration):
     The Markdown report of which files of a pull request need review.
     """
 
+    MARK_VIEWED_SETUP_TEMPLATE = (
+        PackageLocation.TEMPLATES.value / "review_triage_mark_viewed_setup.md.jinja"
+    )
+    """
+    The report of setting a repository's Actions up to mark files viewed.
+    """
+
+    MARK_VIEWED_CALLER_TEMPLATE = (
+        PackageLocation.TEMPLATES.value / "review_triage_mark_viewed_caller.yml"
+    )
+    """
+    The workflow installed on a user's repository that calls basstler's reusable
+    workflow marking files viewed.
+    """
+
 
 class PluginLocation(PathEnumeration):
     """
@@ -374,6 +389,11 @@ class BasstlerRepositoryLocation(PathEnumeration):
     PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
     """
     The plugin's manifest: its name, description and, once released, version.
+    """
+
+    REVIEW_TRIAGE_README = Path("docs") / "review-triage" / "README.md"
+    """
+    How to use the review triage and set up marking files viewed.
     """
 
     @property

@@ -1,0 +1,39 @@
+## Marking files viewed from {{ setup.workflow_repository.full_name }}'s Actions
+
+{% for step in setup.steps %}
+- {{ step.description }}: {{ step.state }}{% if step.reason %} - {{ step.reason }}{% endif %}
+
+{% endfor %}
+{% if setup.user_steps %}
+
+### Left to you
+
+{% for step in setup.user_steps %}
+{{ loop.index }}. {{ step.description[0] | upper }}{{ step.description[1:] }}:
+{% if step.command %}
+
+   ```bash
+   {{ step.command }}
+   ```
+
+   Or in the browser:
+{% endif %}
+{% for browser_step in step.browser_steps %}
+   - {{ browser_step }}
+{% endfor %}
+{% if step.text %}
+
+   ```yaml
+{{ step.text | indent(3, true) }}
+   ```
+{% endif %}
+
+{% endfor %}
+Then run this command again: it checks every step. Once nothing is left,
+`basstler review-triage mark-viewed <number>` falls back to this workflow where it
+cannot mark a pull request's files itself.
+{% else %}
+
+Everything is in place: `basstler review-triage mark-viewed <number>` falls back to
+this workflow where it cannot mark a pull request's files itself.
+{% endif %}

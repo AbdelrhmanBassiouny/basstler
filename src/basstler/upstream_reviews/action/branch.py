@@ -18,6 +18,7 @@ from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.render_common import create_template_environment
+from basstler.repository import BASSTLER_REPOSITORY
 
 
 # %% the Action branch's names
@@ -90,7 +91,7 @@ class BasstlerSource(StrEnum):
     Where the reusable workflow and the package a run installs come from.
     """
 
-    REPOSITORY = "KAOS-repositories/basstler"
+    REPOSITORY = BASSTLER_REPOSITORY.full_name
     REUSABLE_WORKFLOW = ".github/workflows/upstream-reviews-action.yml"
     LATEST_RELEASE = "release"
     """

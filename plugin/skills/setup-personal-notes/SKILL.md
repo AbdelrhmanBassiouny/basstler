@@ -318,7 +318,14 @@ the lines and the browser steps on exactly as printed, never shortened to one of
 the two; once the user has done them, run the command again: it counts a step
 done when a run that needs it succeeded.
 
-## 9. Confirm, by re-running the check
+## 9. Optional: marking mechanical files viewed
+
+Ask once, with `AskUserQuestion` ("Not now (Recommended)", "Set it up"), whether
+`basstler review-triage` should mark the mechanical files of pull requests they review
+*Viewed*. On "Set it up", follow
+[`setup-review-triage`](../setup-review-triage/SKILL.md) from its step 1.
+
+## 10. Confirm, by re-running the check
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/hooks/check-setup.sh" $ARGUMENTS || true

@@ -14,10 +14,15 @@ from basstler.github.client import GitHubRestClient
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import PullRequestReference, Repository
 from basstler.review_triage.command_names import ReviewTriageCommand
-from basstler.review_triage.outputs import MarkdownReport, TriageOutput, ViewedMarking
+from basstler.review_triage.outputs import MarkdownReport, ViewedMarking
 from basstler.review_triage.pull_request import PullRequestReader
-from basstler.review_triage.triage import PullRequestTriager
-from basstler.review_triage.viewed_request import MarkViewedRequest
+from basstler.review_triage.triage import PullRequestTriage, PullRequestTriager
+from basstler.review_triage.viewed_request import (
+    MarkViewedRequest,
+    ViewedMarkingRoutes,
+)
+from basstler.review_triage.viewed_setup import MarkViewedSetup
+from basstler.locations import ClaudeCodeVariable
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -59,23 +64,18 @@ def named_or_origin(repository: str | None, git: GitCommandRunner) -> Repository
     return Repository.from_remote_url(git.run("remote", "get-url", ORIGIN_REMOTE))
 
 
-def publish_triage(
-    pull_request: int, repository: str | None, outputs: tuple[TriageOutput, ...]
-) -> None:
+def read_triage(
+    pull_request: PullRequestReference, git: GitCommandRunner
+) -> PullRequestTriage:
     """
-    Triage a pull request in the current checkout and hand it to each output.
-
-    :param pull_request: The pull request's number.
-    :param repository: Its repository as ``owner/name``, the checkout's ``origin`` when
-        ``None``.
-    :param outputs: Where the triage goes, in order.
+    :param pull_request: The pull request.
+    :param git: The checkout holding, or fetching, its commits.
+    :return: Its triage.
     """
-    git = GitCommandRunner(Path.cwd())
-    resolved = named_or_origin(repository, git)
-    changes = PullRequestReader(git, GitHubRestClient()).read(resolved, pull_request)
-    triage = PullRequestTriager().triage(changes)
-    for output in outputs:
-        output.publish(triage)
+    changes = PullRequestReader(git, GitHubRestClient()).read(
+        pull_request.repository, pull_request.number
+    )
+    return PullRequestTriager().triage(changes)
 
 
 # %% the commands
@@ -98,25 +98,46 @@ def report(pull_request: int, *, repository: str | None = None) -> ReviewTriageE
     :param repository: Its repository as ``owner/name``; the checkout's ``origin`` by
         default.
     """
-    publish_triage(pull_request, repository, (MarkdownReport(),))
+    git = GitCommandRunner(Path.cwd())
+    reference = PullRequestReference(named_or_origin(repository, git), pull_request)
+    MarkdownReport().publish(read_triage(reference, git))
     return ReviewTriageExitCode.SUCCESS
 
 
 @review_triage_app.command(name=ReviewTriageCommand.MARK_VIEWED)
 def mark_viewed(
-    pull_request: int, *, repository: str | None = None
+    pull_request: int,
+    *,
+    repository: str | None = None,
+    workflow_repository: str | None = None,
+    directly: bool = False,
 ) -> ReviewTriageExitCode:
     """
-    Mark a pull request's mechanical files viewed for the account whose GitHub
-    credential is configured, and print the triage.
+    Mark a pull request's mechanical files viewed for the logged-in account, or, where
+    that fails, ask a repository's Actions to; then print the triage.
 
     :param pull_request: The pull request's number.
     :param repository: Its repository as ``owner/name``; the checkout's ``origin`` by
         default.
+    :param workflow_repository: The repository whose Actions are asked when marking
+        directly fails, as ``owner/name``; the checkout's ``origin`` by default.
+    :param directly: Only mark them directly, never through Actions, as the workflow
+        that marks them does.
+    :raises GraphQLMutationRefused: If marking them directly, alone, fails.
+    :raises FilesNotMarkedViewed: If neither way marks them.
     """
-    publish_triage(
-        pull_request, repository, (ViewedMarking(GitHubRestClient()), MarkdownReport())
+    git = GitCommandRunner(Path.cwd())
+    reference = PullRequestReference(named_or_origin(repository, git), pull_request)
+    triage = read_triage(reference, git)
+    MarkdownReport().publish(triage)
+    routes = ViewedMarkingRoutes(
+        ViewedMarking(GitHubRestClient()),
+        MarkViewedRequest(named_or_origin(workflow_repository, git), reference),
+        GitHubRestClient(),
+        ClaudeCodeVariable.REMOTE.is_true(),
+        directly,
     )
+    logger.info(routes.mark(triage))
     return ReviewTriageExitCode.SUCCESS
 
 
@@ -145,4 +166,37 @@ def request_mark_viewed(
         f"Asked {request.workflow_repository.full_name}'s Actions to mark the "
         f"mechanical files of {reference.url} viewed; the run shows at {runs}"
     )
+    return ReviewTriageExitCode.SUCCESS
+
+
+@review_triage_app.command(name=ReviewTriageCommand.SET_UP_MARK_VIEWED)
+def set_up_mark_viewed(
+    *,
+    workflow_repository: str | None = None,
+    repository: str | None = None,
+    branch_or_tag: str = "main",
+    on_every_pull_request: bool = False,
+) -> ReviewTriageExitCode:
+    """
+    Set a repository's Actions up to mark files viewed, as far as a command can, and
+    print what each step came to and the steps left to you.
+
+    :param workflow_repository: The repository whose Actions mark the files, as
+        ``owner/name``; the checkout's ``origin`` by default.
+    :param repository: The repository the pull requests are opened on; the workflow
+        repository's parent, or itself, by default.
+    :param branch_or_tag: The basstler branch or tag the installed workflow runs.
+    :param on_every_pull_request: Also run it for every pull request opened or updated
+        on the workflow repository, which then defaults to the pull requests'.
+    """
+    git = GitCommandRunner(Path.cwd())
+    if on_every_pull_request and workflow_repository is None:
+        workflow_repository = repository
+    setup = MarkViewedSetup(
+        named_or_origin(workflow_repository, git),
+        Repository.parse(repository) if repository else None,
+        branch_or_tag,
+        on_every_pull_request,
+    )
+    logger.info(setup.run(GitHubRestClient()))
     return ReviewTriageExitCode.SUCCESS
