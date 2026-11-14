@@ -35,7 +35,7 @@ from typing import Any
 
 import yaml
 
-from basstler.exceptions import PlanValidationError
+from basstler.plan.exceptions import PlanValidationError
 from basstler.github.pull_request_source import (
     GitHubPullRequestSource,
     PullRequestSource,

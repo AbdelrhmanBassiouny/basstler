@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 import basstler.plan.manifest_tools
-from basstler.exceptions import PlanValidationError
+from basstler.plan.exceptions import PlanValidationError
 from basstler.github.repository import Repository
 from basstler.plan.manifest_tools import (
     BranchIndex,

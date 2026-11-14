@@ -7,9 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from basstler.exceptions import (
-    InvalidSchemaVersion,
-)
+from basstler.plan.exceptions import InvalidSchemaVersion
 from basstler.plan.model import ItemStatus, ManifestKey
 
 from .fixture_plans import (

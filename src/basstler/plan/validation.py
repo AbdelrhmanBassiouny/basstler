@@ -1,6 +1,6 @@
 """
 Checks a freshly loaded plan.yaml against the schema rules in plan-schema.md, reporting
-every :class:`~basstler.exceptions.ValidationProblem` it carries at once.
+every :class:`~basstler.plan.exceptions.ValidationProblem` it carries at once.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 
 import rustworkx
 
-from basstler.exceptions import (
+from basstler.plan.exceptions import (
     DependencyCycle,
     DuplicateItemId,
     InvalidBlockers,

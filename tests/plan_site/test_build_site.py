@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.exceptions import PlanValidationError
+from basstler.plan.exceptions import PlanValidationError
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github.pull_request_record import (
     PullRequestField,
