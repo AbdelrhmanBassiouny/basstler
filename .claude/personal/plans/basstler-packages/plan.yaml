@@ -41,7 +41,8 @@ items:
   notes: >
     Draft PR #210: modules moved into basstler.git and basstler.github, crossings 25 -> 18.
     ExternalCallFailed went to core, not github, because GitCommandFailed in git subclasses it.
-    new-crossings now follows git renames with --base-commit, so later move PRs keep CI green.
+    new-crossings takes the base commit and reads its crossings in the same process, following
+    git renames, so later move PRs keep CI green; the staged code-rules check follows moves too.
 - id: break-remaining-cycles
   title: Break the remaining cycles and give each distribution its own locations, environment
     and exceptions
@@ -204,6 +205,21 @@ items:
     plus the closure of what they require, without extras. Needs each distribution''s own
     pyproject.toml, so it follows uv-workspace. A crossing is reported by the same code-rules
     check and CI comparison with the base. release:minor.
+
+    '
+
+- id: pull-request-record-model
+  title: Parse a pull request's REST record into a ValidatedJSONModel
+  track: package-split
+  depends_on:
+  - git-and-github-domain
+  status: not started
+  notes: 'Asked on #210 (discussion_r4567106354). github.pull_request_record reads a pull
+    request as a raw Mapping through PullRequestField, PullRequestHeadKey and AccountField;
+    replace them with a ValidatedJSONModel parsed once at the boundary, its nested head and
+    accounts as models of their own, and move every reader (maintenance, plan_site, plan,
+    personal_notes and the tests building dict records, ~290 references) onto its attributes.
+    Pure refactor, no release label.
 
     '
 landed_item_count: 1
