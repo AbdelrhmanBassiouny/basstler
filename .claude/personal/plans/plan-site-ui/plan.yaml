@@ -134,11 +134,13 @@ items:
   pull_request_number: 209
   session: https://claude.ai/code/session_018wfiv8Ms8MFF2MJcxPWn2w
   depends_on: []
-  notes: The model picker offers the Claude Code aliases opus, sonnet and haiku, which always
-    resolve to the newest models, replacing the stale ModelOption list and its Session default.
-    Each action kind declares its recommended alias; a committed TOML holds the per-task defaults
-    and a personal one overrides them, layered like plan-item-modes.toml. The copied command
-    is /model <alias> then the command.
+  notes: >
+    The model picker offers the Claude Code aliases opus, sonnet and haiku, which always resolve to
+    the newest models, replacing the stale ModelOption list and its Session default. Each item
+    carries a recommended_model that the skill creating it (plan-create or add-plan-item) sets from
+    the task's difficulty; its action buttons preselect it, and an item without one preselects none.
+    The copied command is /model <alias> then the command. Per item, not per skill: no TOML of
+    defaults, no personal override.
 - id: rules-and-notes-comments
   title: Highlight and comment on any rule or note on the site, then ask Claude or commit
     the change
