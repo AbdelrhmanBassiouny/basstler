@@ -89,6 +89,12 @@ class PackageLocation(PathEnumeration):
     The templates the plan site's pages are rendered from.
     """
 
+    SITE_FONTS = TEMPLATES / "fonts"
+    """
+    The font files the plan site serves, each beside its licence. The site serves them
+    from a directory of the same name.
+    """
+
     PACKAGE_MAP = DIRECTORY / "package_map.py"
     """
     The module declaring which distribution ships each of the package's modules.
@@ -154,6 +160,34 @@ class CommitScratchFile(PathEnumeration):
     BLOB = Path("blob")
     """
     One file's content, written out to be stored as a blob.
+    """
+
+
+class SiteFontFile(PathEnumeration):
+    """
+    The font files the plan site serves, each the Latin letters of one open-licence face.
+    """
+
+    CINZEL = PackageLocation.SITE_FONTS.value / "cinzel-latin-700-normal.woff2"
+    """
+    Cinzel Bold: capitals after Roman inscriptions.
+    """
+
+    ALMENDRA = PackageLocation.SITE_FONTS.value / "almendra-latin-700-normal.woff2"
+    """
+    Almendra Bold: a storybook hand.
+    """
+
+    PLAYFAIR_DISPLAY_ITALIC = (
+        PackageLocation.SITE_FONTS.value / "playfair-display-latin-600-italic.woff2"
+    )
+    """
+    Playfair Display SemiBold Italic: a high-contrast serif.
+    """
+
+    OSWALD = PackageLocation.SITE_FONTS.value / "oswald-latin-600-normal.woff2"
+    """
+    Oswald SemiBold: a narrow gothic.
     """
 
 

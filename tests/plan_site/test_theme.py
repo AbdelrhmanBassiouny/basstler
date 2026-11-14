@@ -22,6 +22,7 @@ from basstler.plan_site.theme import (
     AppearanceStorageKey,
     Backdrop,
     BuiltInTheme,
+    BundledFont,
     ChipShape,
     Color,
     ColorScheme,
@@ -301,6 +302,19 @@ def test_a_theme_with_a_backdrop_is_checked_against_its_scene(
     assert readable_theme.pairings_of(readable_theme.light) == (
         readable_theme.light.text_pairings + readable_theme.light.backdrop_pairings
     )
+
+
+@pytest.mark.parametrize("font", BundledFont)
+def test_the_stylesheet_loads_every_font_the_site_serves(font: BundledFont):
+    face = font.value
+    stylesheet = SiteStylesheet().render()
+    assert f'font-family: "{face.family}"; font-style: {face.slant};' in stylesheet
+    assert f'url("{face.site_path}")' in stylesheet
+
+
+@pytest.mark.parametrize("font", BundledFont)
+def test_a_font_the_site_serves_is_shipped_with_the_package(font: BundledFont):
+    assert font.value.file.is_file()
 
 
 def test_every_heading_case_sets_its_own_letters(readable_theme: SiteTheme):

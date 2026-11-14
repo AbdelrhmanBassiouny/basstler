@@ -89,8 +89,8 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
     --drift-x: -1; --drift-y: 0; --drift-duration: 240s; --twinkle-duration: 2.6s;
 {% elif theme_backdrop == backdrop.EMBERS %}
     --drift-x: 0; --drift-y: -1; --drift-duration: 26s; --twinkle-duration: 1.7s;
-{% elif theme_backdrop == backdrop.FIREFLIES %}
-    --drift-x: 1; --drift-y: -1; --drift-duration: 70s; --twinkle-duration: 3.2s;
+{% elif theme_backdrop == backdrop.LEAVES %}
+    --drift-x: 1; --drift-y: 1; --drift-duration: 44s; --twinkle-duration: 5s;
 {% elif theme_backdrop == backdrop.PETALS %}
     --drift-x: -1; --drift-y: 1; --drift-duration: 38s; --twinkle-duration: 6s;
 {% endif %}
@@ -115,6 +115,15 @@ url("data:image/svg+xml,{{ picture | replace("\n", "") | urlencode }}")
     --notch: 0.4em;
 {% endif %}
 {% endmacro %}
+
+/* %% the fonts the site serves itself */
+
+{% for font in bundled_font %}
+@font-face {
+  font-family: "{{ font.value.family }}"; font-style: {{ font.value.slant }}; font-weight: 100 900; font-display: swap;
+  src: url("{{ font.value.site_path }}") format("woff2");
+}
+{% endfor %}
 
 :root {
   --space-1: 0.25rem;

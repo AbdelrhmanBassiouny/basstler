@@ -38,7 +38,7 @@ from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Plan
-from basstler.plan_site.theme import AppearanceSettings, SiteAppearance
+from basstler.plan_site.theme import AppearanceSettings, BundledFont, SiteAppearance
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
@@ -398,6 +398,15 @@ def test_the_site_build_writes_the_stylesheet_its_pages_link(
     hub_site.build(output)
     assert (output / SiteFile.STYLESHEET).read_text() == SiteStylesheet().render()
     assert link_to(hub_site.stylesheet_url) in (output / SiteFile.PAGE).read_text()
+
+
+@pytest.mark.parametrize("font", BundledFont)
+def test_the_site_build_writes_every_font_its_stylesheet_names(
+    hub_site: HubSite, tmp_path: Path, font: BundledFont
+):
+    output = tmp_path / "site"
+    hub_site.build(output)
+    assert (output / font.value.site_path).read_bytes() == font.value.file.read_bytes()
 
 
 def test_the_site_build_draws_every_page_in_the_hub_file_s_themes(

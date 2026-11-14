@@ -11,8 +11,8 @@ site's defaults.
 |---|---|
 | `classic` | Teal on cool grey, flat cards and pill chips, the site's original look; the default |
 | `rose` | Rose and plum, italic Didot-style headings, satin-and-lace frames and buttons with a rose at each corner; a garden with blossom trees, a gazebo, swans and cats, and falling petals |
-| `forge` | Ember on iron, spaced capital monospace headings, wrought-iron frames with a molten seam and flames, riveted buttons; a volcano, a furnace hall, gears and smiths at the anvil, and rising sparks |
-| `elderwood` | Forest green and gold on parchment, storybook headings, wooden frames and buttons twined with a berried vine; a moonlit pine forest with a great tree, an owl, stags and a fairy, and fireflies |
+| `forge` | Ember on iron, spaced narrow capital headings, wrought-iron frames with a molten seam and flames, riveted buttons; a volcano, a furnace hall, gears and smiths at the anvil, and rising sparks |
+| `elderwood` | Forest green and gold on parchment, storybook headings, frames of braided branches with leaves and berries, wooden buttons; a moonlit pine forest with a great tree, an owl, stags and a fairy, with green leaves falling among fireflies |
 | `citadel` | Gold on night slate, small-capital inscription headings, gilded scrollwork frames set with gems, studded gold buttons; a citadel on a crag with dragons, a wizard and knights under twinkling stars |
 
 Every theme but Classic is animated: cards arrive one after another, work under way
@@ -53,7 +53,11 @@ An added theme with a built-in theme's identifier replaces it. The
     passing), `warning` (waiting), `bad` (failed, blocked, closed), `info` (under way),
     `idle` (nothing to report).
 - **`style`** (optional; each key defaults to Classic's):
-  - `body_font`, `heading_font`, `monospace_font`: CSS font lists.
+  - `body_font`, `heading_font`, `monospace_font`: CSS font lists. The site serves four
+    open-licence fonts itself, so every viewer sees them: `"Cinzel"`, `"Almendra"`,
+    `"Playfair Display"` (italic only) and `"Oswald"`. Each covers Latin letters, at one
+    weight. Any other font shows only for a viewer who has it installed, so end every
+    list with common fonts.
   - `heading_case`: `as-written`, `uppercase` or `small-capitals`, for headings and
     buttons; `heading_letter_spacing`: a length added between their letters;
     `heading_italic`: `true` or `false`.
@@ -69,13 +73,13 @@ An added theme with a built-in theme's identifier replaces it. The
     - `gilded`, `vine`, `lace`, `forged`: thick frames drawn as pictures in the
       theme's own colours, with ornate corners that reach past the card: gilded
       scrollwork set with gems (`accent`, gems in `bad`), wood twined with a berried
-      vine (`accent` leaves), satin and lace with roses (`accent`, leaves in `good`),
+      braided branches (`accent` leaves), satin and lace with roses (`accent`, leaves in `good`),
       and wrought iron with a molten seam and flames (`accent`). They ignore the
       radii and `border_width`, draw buttons and menus to match, set buttons in the
       heading font and enlarge the page's title.
   - `backdrop`: a scene along the foot of the page and what drifts behind it: `none`,
     `stars` (a citadel, dragons, a wizard and knights), `embers` (a volcano, a
-    furnace hall and smiths), `fireflies` (a forest, a great tree, an owl and stags)
+    furnace hall and smiths), `leaves` (a forest, a great tree, an owl and stags, with falling leaves)
     or `petals` (a garden, a gazebo, swans and cats).
   - `animated`: `true` makes cards arrive, work under way glow, progress bars shimmer
     and the backdrop drift; `false`, the default, keeps everything still.

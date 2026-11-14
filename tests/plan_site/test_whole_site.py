@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.plan_site.__main__ import HubSite, SiteFile, main
 from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.plan_site.hub import PlanHub, SiteAddress
@@ -74,8 +74,10 @@ def test_the_site_publishes_the_hub_every_index_and_every_valid_plan(built_site:
     written = {
         path.relative_to(built_site) for path in built_site.rglob("*") if path.is_file()
     }
+    fonts = Path(PackageLocation.SITE_FONTS.name)
     assert written == {
         *pages,
+        *(fonts / font.name for font in PackageLocation.SITE_FONTS.iterdir()),
         Path(SiteFile.STYLESHEET),
         Path(SiteFile.NO_JEKYLL),
         Path(SiteFile.DIGEST),

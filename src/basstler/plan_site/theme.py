@@ -6,14 +6,14 @@ picks on the page, and the contrast every theme's text must reach before it is p
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from enum import StrEnum
+from enum import Enum, StrEnum
 from functools import cached_property
 from typing import Annotated
 
 import yaml
 from pydantic import StringConstraints
 
-from basstler.locations import PathEnumeration, PackageLocation
+from basstler.locations import PackageLocation, PathEnumeration, SiteFontFile
 from basstler.json_model import ValidatedJSONModel
 from basstler.plan_site.exceptions import NoPublishableThemeError
 
@@ -401,6 +401,82 @@ class Palette(ValidatedJSONModel):
         ]
 
 
+# %% the fonts the site serves
+
+
+class FontSlant(StrEnum):
+    """
+    Whether a font's letters stand upright or lean, as CSS ``font-style`` names it.
+    """
+
+    UPRIGHT = "normal"
+    """
+    Letters that stand upright.
+    """
+
+    ITALIC = "italic"
+    """
+    Letters that lean.
+    """
+
+
+@dataclass(frozen=True)
+class FontFace:
+    """
+    One font the site serves itself, so a viewer sees it without having it installed.
+    """
+
+    family: str
+    """
+    The name a theme's font list calls the font by.
+    """
+
+    file: SiteFontFile
+    """
+    The font's file.
+    """
+
+    slant: FontSlant = FontSlant.UPRIGHT
+    """
+    The slant of the letters the file draws.
+    """
+
+    @property
+    def site_path(self) -> str:
+        """
+        Where the site serves the file, relative to its stylesheet.
+        """
+        return f"{self.file.parent.name}/{self.file.name}"
+
+
+class BundledFont(Enum):
+    """
+    The fonts the site serves, which any theme's font list may name.
+    """
+
+    CINZEL = FontFace("Cinzel", SiteFontFile.CINZEL)
+    """
+    Capitals after Roman inscriptions.
+    """
+
+    ALMENDRA = FontFace("Almendra", SiteFontFile.ALMENDRA)
+    """
+    A storybook hand.
+    """
+
+    PLAYFAIR_DISPLAY = FontFace(
+        "Playfair Display", SiteFontFile.PLAYFAIR_DISPLAY_ITALIC, FontSlant.ITALIC
+    )
+    """
+    A high-contrast italic serif.
+    """
+
+    OSWALD = FontFace("Oswald", SiteFontFile.OSWALD)
+    """
+    A narrow gothic.
+    """
+
+
 # %% shape
 
 
@@ -528,9 +604,10 @@ class Backdrop(StrEnum):
     A volcano, a furnace hall, gears and smiths at the anvil, with sparks rising.
     """
 
-    FIREFLIES = "fireflies"
+    LEAVES = "leaves"
     """
-    A moonlit pine forest with a great tree, an owl, stags and a fairy, and fireflies.
+    A moonlit pine forest with a great tree, an owl, stags and a fairy, with green leaves
+    falling among fireflies.
     """
 
     PETALS = "petals"
@@ -717,13 +794,13 @@ class BuiltInTheme(PathEnumeration):
 
     FORGE = PackageLocation.TEMPLATES.value / "themes" / "forge.yaml"
     """
-    Ember on iron, with monospace headings, wrought-iron frames and rising sparks.
+    Ember on iron, with narrow capital headings, wrought-iron frames and rising sparks.
     """
 
     ELDERWOOD = PackageLocation.TEMPLATES.value / "themes" / "elderwood.yaml"
     """
-    Forest green and gold on parchment, with book-face headings, vine-twined frames and
-    fireflies.
+    Forest green and gold on parchment, with storybook headings, frames of braided branches
+    and falling leaves.
     """
 
     CITADEL = PackageLocation.TEMPLATES.value / "themes" / "citadel.yaml"

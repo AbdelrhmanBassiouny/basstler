@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import shutil
 import sys
 import tempfile
 from abc import ABC, abstractmethod
@@ -41,7 +42,7 @@ from basstler.github.pull_request_source import (
     PullRequestSource,
 )
 from basstler.github.repository import GitHubAddress, Repository
-from basstler.locations import ProjectLocation
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
@@ -457,8 +458,8 @@ class HubSite(SiteSection[SiteSummary]):
 
     def build(self, output: Path) -> SiteSummary:
         """
-        Render every repository, then the hub linking them and the stylesheet every page
-        links, then the site's digest.
+        Render every repository, then the hub linking them, the stylesheet every page
+        links and the fonts it names, then the site's digest.
 
         :param output: The directory to write the site into.
         :return: The site's summary, holding every repository's card in the hub file's
@@ -480,6 +481,11 @@ class HubSite(SiteSection[SiteSummary]):
         self.write_page(output, hub_page.render())
         stylesheet = SiteStylesheet(self.appearance)
         (output / SiteFile.STYLESHEET).write_text(stylesheet.render())
+        shutil.copytree(
+            PackageLocation.SITE_FONTS,
+            output / PackageLocation.SITE_FONTS.name,
+            dirs_exist_ok=True,
+        )
         (output / SiteFile.NO_JEKYLL).touch()
         SiteDigest(output).write()
         return summary

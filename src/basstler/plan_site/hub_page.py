@@ -22,6 +22,7 @@ from basstler.plan_site.plan import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.plan_site.site_page import SitePage
 from basstler.plan_site.theme import (
+    BundledFont,
     Backdrop,
     Color,
     AppearanceAttribute,
@@ -625,6 +626,7 @@ class SiteStylesheet(TemplatePage):
             backdrop=Backdrop,
             heading_case=HeadingCase,
             color=Color,
+            bundled_font=BundledFont,
         )
 
 
