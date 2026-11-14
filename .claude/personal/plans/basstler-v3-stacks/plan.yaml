@@ -69,17 +69,14 @@ items:
     and the request branch are retired. An on-demand run fails fast when it does not start.
 
     '
-
 - id: contribute-rename
-  title: "Rename promote to contribute everywhere, with the label migrated"
+  title: Rename promote to contribute everywhere, with the label migrated
   branch: null
   track: stacks
-  depends_on:
-  - plan-site-ui/promote-button
+  depends_on: []
   status: not started
   notes: Breaking (release:major). Renames the classes, Stack.promotion_order, the maintenance
-    promote and stack promotion-link commands, skill text and docs, and migrates the
-    promotion-link-sent label - setup creates the new one and a pass relabels pull requests
-    carrying the old one. Open at kickoff - how long the old label is read, and whether
-    the old commands stay as aliases for a release. Follows promote-button, which adds
-    files it renames.
+    promote and stack promotion-link commands, skill text and docs, and migrates the promotion-link-sent
+    label - setup creates the new one and a pass relabels pull requests carrying the old one.
+    Open at kickoff - how long the old label is read, and whether the old commands stay as
+    aliases for a release. Follows promote-button, which adds files it renames.

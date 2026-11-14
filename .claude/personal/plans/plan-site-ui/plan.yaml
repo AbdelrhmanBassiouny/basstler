@@ -2,14 +2,15 @@ schema_version: 1
 id: plan-site-ui
 title: 'Plan site you can act from: commands, promotion, activity order and a refined design'
 description: Buttons on the plan site defer, restore and delete items and plans, refresh the
-  site and promote an item upstream; plans are ordered by recent activity; and the site gets a
-  polished, easy-to-navigate design with the same progress statistics on every plan.
+  site and promote an item upstream; plans are ordered by recent activity; and the site gets
+  a polished, easy-to-navigate design with the same progress statistics on every plan.
 default_repository: KAOS-repositories/basstler
 tracking_issue: 134
 waves:
 - id: actionable-site
   name: 'Wave 1: Act from the site'
-  description: Every change the site offers is one button away, and the site shows what is fresh.
+  description: Every change the site offers is one button away, and the site shows what is
+    fresh.
 tracks:
 - id: commands
   name: Site commands
@@ -30,102 +31,101 @@ items:
   status: not started
   depends_on:
   - basstler-service/site-actions
-  notes: A card's menu sends defer, restore or delete through basstler-service/site-actions as the signed-in
-    viewer; delete asks to confirm first and is refused for an item other items depend on or one with
-    an open pull request, suggesting defer instead.
+  notes: A card's menu sends defer, restore or delete through basstler-service/site-actions
+    as the signed-in viewer; delete asks to confirm first and is refused for an item other
+    items depend on or one with an open pull request, suggesting defer instead.
 - id: plan-commands
-  title: Defer, restore and delete a whole plan from its card; deferred plans sink to a collapsed section
+  title: Defer, restore and delete a whole plan from its card; deferred plans sink to a collapsed
+    section
   track: commands
   status: not started
   depends_on:
   - item-commands
-  notes: Same write path as item-commands, acting on the plan's plan.yaml. Deferred plans are listed last
-    on the repository index in a collapsed section; delete asks to confirm and stays recoverable from
-    history.
-- id: promote-button
-  title: An "Open in {upstream}" button on each promotable item opens the prefilled compare-and-create page
-  track: display
-  status: in progress
-  branch: claude/plan-site-ui-promote-button-i73glr
-  pull_request_number: 211
-  session: https://claude.ai/code/session_018wfiv4zLyYNu5dytDgvttM
-  depends_on: []
-  notes: A plain link, built at site build time, opening in a new tab; no command issue. Promotable
-    is one shared rule with Stack.promotion_order (approved, parent landed, not withheld, checks
-    passing, no upstream pull request). The link is PromotionLink.build's, narrowed to an upstream
-    target read from the fork's parent; title is the fork pull request's, body the one line linking
-    back to it. Disabled with the reason as its hover text otherwise.
+  notes: Same write path as item-commands, acting on the plan's plan.yaml. Deferred plans
+    are listed last on the repository index in a collapsed section; delete asks to confirm
+    and stays recoverable from history.
 - id: activity-ordering
-  title: Plans and repositories are ordered by recent activity, the stalest last, with a stale mark
+  title: Plans and repositories are ordered by recent activity, the stalest last, with a stale
+    mark
   track: display
   status: not started
   depends_on: []
-  notes: A plan's last activity is the later of the last notes commit touching its directory and
-    the newest updated_at of its items' pull requests; the notes fetch keeps enough history for it.
-    Cards say how long ago; past a stale threshold (a field default) they are muted. Repositories on
-    the hub sort the same way.
+  notes: A plan's last activity is the later of the last notes commit touching its directory
+    and the newest updated_at of its items' pull requests; the notes fetch keeps enough history
+    for it. Cards say how long ago; past a stale threshold (a field default) they are muted.
+    Repositories on the hub sort the same way.
 - id: site-redesign
-  title: A refined, professional site design with easy navigation and the same progress card on every
-    plan page
+  title: A refined, professional site design with easy navigation and the same progress card
+    on every plan page
   track: display
   status: not started
   depends_on: []
-  notes: Design tokens, one type scale, light and dark; sticky header with breadcrumbs, search and a slot
-    for the Refresh button; keyboard-accessible item menu; toasts. The plan page header shows the progress
-    card the index uses (stage bar, started, reviewed, done). Status filter chips replace the done toggle,
-    hiding done and deferred by default, and a link to a hidden item reveals it (folds in team-basstler/hide-deferred-items). Every existing link that leaves the site is changed to open in a new tab.
+  notes: Design tokens, one type scale, light and dark; sticky header with breadcrumbs, search
+    and a slot for the Refresh button; keyboard-accessible item menu; toasts. The plan page
+    header shows the progress card the index uses (stage bar, started, reviewed, done). Status
+    filter chips replace the done toggle, hiding done and deferred by default, and a link
+    to a hidden item reveals it (folds in team-basstler/hide-deferred-items). Every existing
+    link that leaves the site is changed to open in a new tab.
 - id: site-themes
-  title: Theme and colour options for the site and its chips, chosen on the page and set as site defaults
+  title: Theme and colour options for the site and its chips, chosen on the page and set as
+    site defaults
   track: display
   status: in progress
   branch: claude/plan-site-ui-themes-8hqtdk
   pull_request_number: 212
   session: https://claude.ai/code/session_018wfiv8TNFzr6VY6TbNCbE6
   depends_on: []
-  notes: Themes restyle colours, chip tones, borders, ornaments, type and motion via CSS tokens on
-    site.css; ship Classic, Rosé, Forge and an original high-fantasy one, plus /site-theme-create
-    and docs/themes.md. A header menu picks light, dark or system and a theme, kept per viewer in
-    localStorage and applied before first paint. The owner sets the default and adds themes in the
-    hub file (pydantic models). The build checks WCAG AA contrast and reports a failing theme in
-    the health banner instead of publishing it.
-
+  notes: Themes restyle colours, chip tones, borders, ornaments, type and motion via CSS tokens
+    on site.css; ship Classic, Rosé, Forge and an original high-fantasy one, plus /site-theme-create
+    and docs/themes.md. A header menu picks light, dark or system and a theme, kept per viewer
+    in localStorage and applied before first paint. The owner sets the default and adds themes
+    in the hub file (pydantic models). The build checks WCAG AA contrast and reports a failing
+    theme in the health banner instead of publishing it.
 - id: base-chip
-  title: 'Each item card shows what its pull request is based on: the default branch, another item, or
-    another pull request'
+  title: 'Each item card shows what its pull request is based on: the default branch, another
+    item, or another pull request'
   track: display
   status: not started
   depends_on: []
-  notes: 'The build reads each item''s pull request base from GitHub. A card gets a base chip, always
-    a link: the default branch, linking to its branch page; a branch some plan item tracks, as that item''s
-    chip linking to its card, beside its pull request number linking to the pull request; otherwise the
-    branch''s open pull request, or the branch page. A base that is another item missing from the item''s
-    depends_on is flagged as drift.'
-
+  notes: 'The build reads each item''s pull request base from GitHub. A card gets a base chip,
+    always a link: the default branch, linking to its branch page; a branch some plan item
+    tracks, as that item''s chip linking to its card, beside its pull request number linking
+    to the pull request; otherwise the branch''s open pull request, or the branch page. A
+    base that is another item missing from the item''s depends_on is flagged as drift.'
 - id: remove-site
-  title: 'One command removes a repository from the plan site'
+  title: One command removes a repository from the plan site
   track: lifecycle
   depends_on: []
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
-  notes: 'From Hesham87/Platform_maintainer: taking the site away was manual: the dispatch workflow, the hub entry and the merge workflow branch and pull request by hand, then the secrets, the token and the site repository in the browser. One command removes what it can and prints only the steps left to a person, as publication does.'
-
+  notes: 'From Hesham87/Platform_maintainer: taking the site away was manual: the dispatch
+    workflow, the hub entry and the merge workflow branch and pull request by hand, then the
+    secrets, the token and the site repository in the browser. One command removes what it
+    can and prints only the steps left to a person, as publication does.'
 - id: local-site-open
-  title: 'One command builds the plan site from the notes on your computer and opens it'
+  title: One command builds the plan site from the notes on your computer and opens it
   track: lifecycle
   depends_on: []
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
-  notes: 'Pages on a personal Free account is public. basstler plan-site open fetches the notes branches with the user''s own git and gh credentials, so private repositories work; rebuilds the styled site into a local cache only when a notes commit changed, with live pull request states read at build; and opens it in the browser. Same renderer as the Pages site, relative links, a built-at stamp. Setup offers it, or the public site with PLAN_SITE_READ_TOKEN; Pages stays the default. Without gh login it prints the login step.'
-
+  notes: Pages on a personal Free account is public. basstler plan-site open fetches the notes
+    branches with the user's own git and gh credentials, so private repositories work; rebuilds
+    the styled site into a local cache only when a notes commit changed, with live pull request
+    states read at build; and opens it in the browser. Same renderer as the Pages site, relative
+    links, a built-at stamp. Setup offers it, or the public site with PLAN_SITE_READ_TOKEN;
+    Pages stays the default. Without gh login it prints the login step.
 - id: desktop-launcher
-  title: 'Setup installs a desktop launcher that opens the up-to-date plan site in one click'
+  title: Setup installs a desktop launcher that opens the up-to-date plan site in one click
   track: lifecycle
   depends_on:
   - local-site-open
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
-  notes: 'Setup installs a launcher that runs plan-site open: a .desktop entry on Linux, an app in ~/Applications on macOS, a Start-menu and desktop shortcut on Windows (windows-support). It runs the latest release through uvx, so it needs no update; removing it is one command. No phone access (owner, 2026-11-09): phones cannot run it, and private hosting waits until phone access matters.'
-
+  notes: 'Setup installs a launcher that runs plan-site open: a .desktop entry on Linux, an
+    app in ~/Applications on macOS, a Start-menu and desktop shortcut on Windows (windows-support).
+    It runs the latest release through uvx, so it needs no update; removing it is one command.
+    No phone access (owner, 2026-11-09): phones cannot run it, and private hosting waits until
+    phone access matters.'
 - id: model-recommendation
   title: Each action button preselects the recommended Claude model for its task
   track: display
@@ -134,19 +134,21 @@ items:
   pull_request_number: 209
   session: https://claude.ai/code/session_018wfiv8Ms8MFF2MJcxPWn2w
   depends_on: []
-  notes: The model picker offers the Claude Code aliases opus, sonnet and haiku, which always resolve
-    to the newest models, replacing the stale ModelOption list and its Session default. Each action
-    kind declares its recommended alias; a committed TOML holds the per-task defaults and a personal
-    one overrides them, layered like plan-item-modes.toml. The copied command is /model <alias> then
-    the command.
-
+  notes: The model picker offers the Claude Code aliases opus, sonnet and haiku, which always
+    resolve to the newest models, replacing the stale ModelOption list and its Session default.
+    Each action kind declares its recommended alias; a committed TOML holds the per-task defaults
+    and a personal one overrides them, layered like plan-item-modes.toml. The copied command
+    is /model <alias> then the command.
 - id: rules-and-notes-comments
-  title: Highlight and comment on any rule or note on the site, then ask Claude or commit the change
+  title: Highlight and comment on any rule or note on the site, then ask Claude or commit
+    the change
   track: display
   status: not started
   depends_on: []
-  notes: The plan page shows account rules and notes, repository rules and notes, plan rules (roadmap.md)
-    and plan and item notes, each labelled with where it lives. Selecting text offers a comment anchored
-    to the quote; drafts stay in localStorage. Ask Claude copies one command carrying every quote, comment
-    and source path, which a skill applies; Commit opens the file's GitHub editor on the notes branch
-    until basstler-service/site-actions makes it one click.
+  notes: The plan page shows account rules and notes, repository rules and notes, plan rules
+    (roadmap.md) and plan and item notes, each labelled with where it lives. Selecting text
+    offers a comment anchored to the quote; drafts stay in localStorage. Ask Claude copies
+    one command carrying every quote, comment and source path, which a skill applies; Commit
+    opens the file's GitHub editor on the notes branch until basstler-service/site-actions
+    makes it one click.
+landed_item_count: 1
