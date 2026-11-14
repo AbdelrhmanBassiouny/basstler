@@ -43,7 +43,7 @@ from pathlib import Path
 from basstler.bash import Bash
 from basstler.class_property import classproperty
 from basstler.git.commands import GitCommandFailed, GitCommandRunner
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.repository import Repository
 from basstler.github.tooling_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
@@ -787,7 +787,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if arguments.command == SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION:
         remote = PersonalNotesSetting.REMOTE.resolve(project_root, os.environ)
-        branch = RemoteBranch(ActionBranch.NAME, GitCommandRunner(project_root), remote)
+        branch = GitHubRemoteBranch(
+            ActionBranch.NAME, GitCommandRunner(project_root), remote
+        )
         try:
             changed = ActionInstallation(arguments.branch_or_tag).install(branch)
         except GitCommandFailed as failure:

@@ -17,7 +17,6 @@ from basstler.git.commands import (
     GitCommandRunner,
     ProposedPush,
 )
-from basstler.github.repository import Repository
 from basstler.json_model import JSONSerializable
 
 # %% the branch
@@ -65,23 +64,6 @@ class RemoteBranch(Branch):
         :return: The URL the remote points at.
         """
         return self.git.attempt("remote", "get-url", self.remote).output or self.remote
-
-    @property
-    def repository(self) -> Repository | None:
-        """
-        :return: The repository the remote points at, ``None`` when it names none - a
-            remote given as a local path.
-        """
-        url = self.url
-        if not Repository.names_a_repository(url):
-            return None
-        return Repository.from_remote_url(url)
-
-    @property
-    def description(self) -> str:
-        """:return: The repository's name, or the remote's where it names none."""
-        repository = self.repository
-        return repository.full_name if repository else self.remote
 
     def exists(self) -> bool:
         """

@@ -25,7 +25,7 @@ from basstler.stack.commit_move import (
     CommitMoveChecks,
     ProposedCommitMove,
 )
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.client import GitHubRestClient
 from basstler.github.constants import MaintenanceNotice
 from basstler.github.repository_access import GitHubRepository, PullRequestReader
@@ -127,7 +127,9 @@ class MaintenancePass:
                 self.upstream().open_pull_requests(), fork
             )
         read = ActionRead(
-            RemoteBranch(ActionBranch.NAME, self.git, self.configuration.fork_remote),
+            GitHubRemoteBranch(
+                ActionBranch.NAME, self.git, self.configuration.fork_remote
+            ),
             OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
             GitHubRestClient(),
             answer_type=OpenPullRequestsAnswer,

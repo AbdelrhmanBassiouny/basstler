@@ -32,7 +32,7 @@ from pathlib import Path
 
 from basstler.exit_codes import ExitCode
 from basstler.git.commands import GitCommandFailed, GitCommandRunner
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.client import GitHubRestClient
 from basstler.github.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             ActionRun(arguments.request, git, arguments.remote).publish_answer()
             AbandonedRequests(git, arguments.remote).delete()
             return 0
-        branch = RemoteBranch(ActionBranch.NAME, git, arguments.remote)
+        branch = GitHubRemoteBranch(ActionBranch.NAME, git, arguments.remote)
         if arguments.command == ActionCommand.INSTALL:
             installation = ActionInstallation(arguments.branch_or_tag)
             changed = installation.install(branch)

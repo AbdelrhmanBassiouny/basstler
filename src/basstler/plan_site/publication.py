@@ -23,7 +23,7 @@ from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
 from basstler.git.commands import GitCommandResult, GitCommandRunner
 from basstler.github.login_lending import GitHubLoginLendingRunner
-from basstler.git.remote_branch import RemoteBranch
+from basstler.github.remote_branch import GitHubRemoteBranch
 from basstler.github.client import (
     GitHubFullClient,
     GitHubRestClient,
@@ -207,7 +207,7 @@ class PlanSitePublication:
             "push to the notes branch"
         )
 
-    def notes_branch_of(self, repository: Repository) -> RemoteBranch:
+    def notes_branch_of(self, repository: Repository) -> GitHubRemoteBranch:
         """
         :param repository: A repository the site publishes.
         :return: Its notes branch.
@@ -217,9 +217,9 @@ class PlanSitePublication:
             if repository == self.dispatch_workflow.notes_repository
             else repository.clone_url_under(self.remote_root)
         )
-        return RemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
+        return GitHubRemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
 
-    def default_branch_of(self, remote: str) -> RemoteBranch:
+    def default_branch_of(self, remote: str) -> GitHubRemoteBranch:
         """
         :param remote: A remote, as a remote name or a URL.
         :return: Its default branch, :attr:`initial_branch` when it has none yet.
@@ -229,11 +229,11 @@ class PlanSitePublication:
         match = re.search(
             r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", listed, re.MULTILINE
         )
-        return RemoteBranch(
+        return GitHubRemoteBranch(
             match["branch"] if match else self.initial_branch, self.git, remote
         )
 
-    def site_branch(self) -> RemoteBranch | None:
+    def site_branch(self) -> GitHubRemoteBranch | None:
         """
         :return: The site repository's default branch, ``None`` when GitHub has no such
             repository.
@@ -360,7 +360,7 @@ class PlanSitePublication:
 
     def write(
         self,
-        branch: RemoteBranch,
+        branch: GitHubRemoteBranch,
         workflow: PlanSiteWorkflow,
         message: str,
         report: PublicationReport,
@@ -380,7 +380,7 @@ class PlanSitePublication:
         report.written.append(f"{workflow.location} on {branch.description}")
 
     def write_file(
-        self, branch: RemoteBranch, path: str, text: str, message: str
+        self, branch: GitHubRemoteBranch, path: str, text: str, message: str
     ) -> None:
         """
         Commit one file onto a branch and push it.
@@ -395,7 +395,7 @@ class PlanSitePublication:
 
     def rebuild(
         self,
-        branch: RemoteBranch,
+        branch: GitHubRemoteBranch,
         parent: str,
         workflow: PlanSiteWorkflow,
         message: str,
@@ -548,7 +548,9 @@ class PlanSitePublication:
             workflow.text
         ):
             return None
-        head = RemoteBranch(self.merge_workflow_branch, self.git, self.notes_remote)
+        head = GitHubRemoteBranch(
+            self.merge_workflow_branch, self.git, self.notes_remote
+        )
         head_tip = head.fetch()
         if default_tip and not (
             head_tip and self.git.share_history(head_tip, default_tip)
@@ -643,7 +645,7 @@ def publish(
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(notes_remote)
     git = GitHubLoginLendingRunner(project_root)
-    notes_branch = RemoteBranch(
+    notes_branch = GitHubRemoteBranch(
         PersonalNotesSetting.BRANCH.resolve(project_root, os.environ), git, notes_remote
     )
     site = (
