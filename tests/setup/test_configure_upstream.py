@@ -21,7 +21,7 @@ import basstler.setup.steps
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.setup.report import CheckResult, CheckStatus, SetupCheck, SetupReport
 from basstler.setup.steps import SetupCommand, SetupCommandOption
-from basstler.stack.configuration import StackSetting
+from basstler.github.stack_configuration import StackSetting
 
 from ..constants.paths import PersonalNotesPath
 from ..scratch_repository import SCRATCH_IDENTITY, ScratchRepository

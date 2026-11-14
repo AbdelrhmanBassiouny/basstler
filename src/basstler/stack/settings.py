@@ -23,7 +23,7 @@ from basstler.shell_configuration import (
     ShellConfigurationFunction,
 )
 from basstler.stack.checkout import CurrentCheckout, GitArgument
-from basstler.stack.configuration import (
+from basstler.github.stack_configuration import (
     CommittedStackConfiguration,
     StackSetting,
 )

@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from basstler.class_property import classproperty
 from basstler.locations import ProjectLocation
-from basstler.stack.configuration import (
+from basstler.github.stack_configuration import (
     CommittedStackConfiguration,
     MissingUpstreamRepositoryError,
 )

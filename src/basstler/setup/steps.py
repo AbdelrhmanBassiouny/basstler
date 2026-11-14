@@ -52,7 +52,7 @@ from basstler.shell_configuration import (
     FetchedBranchReference,
     ShellConfigurationFunction,
 )
-from basstler.stack.configuration import StackSetting
+from basstler.github.stack_configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import ActionBranch, ActionInstallation
 

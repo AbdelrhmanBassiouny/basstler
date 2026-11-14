@@ -24,7 +24,7 @@ from pathlib import Path
 
 from basstler.environment import GitHubActionsVariable
 from basstler.github.repository import Repository
-from basstler.stack.configuration import (
+from basstler.github.stack_configuration import (
     CommittedStackConfiguration,
     MissingUpstreamRepositoryError,
 )
