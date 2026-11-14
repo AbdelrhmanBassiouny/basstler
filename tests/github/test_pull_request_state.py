@@ -235,6 +235,17 @@ def test_from_api_reads_label_names():
     assert record.labels == labels
 
 
+def test_from_api_reads_the_base_and_title():
+    base, title = "a-parent", "A title"
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {PullRequestField.BASE: {"ref": base}, PullRequestField.TITLE: title},
+        )
+    )
+    assert (record.base, record.title) == (base, title)
+
+
 def test_from_api_reads_a_merge():
     merged_at = "2026-10-01T12:00:00+00:00"
     record = PullRequestRecord.from_api(

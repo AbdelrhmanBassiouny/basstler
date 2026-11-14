@@ -5,10 +5,11 @@ Fill in what each item of a plan shows on its page, from live pull request data.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github.pull_request_state import (
+    ForkLineage,
     LivePullRequests,
     LiveState,
     PullRequestRecord,
@@ -16,9 +17,19 @@ from basstler.github.pull_request_state import (
 from basstler.github.repository import PullRequestReference, Repository
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
+from basstler.maintenance.promotion import PromotionSummary
+from basstler.plan_site.cards import (
+    ItemAction,
+    PromotionButton,
+    ResolveAction,
+    StartNowAction,
+)
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.workflows import PlanSiteSecret
+from basstler.stack.branch_status import BranchStatus
+from basstler.stack.configuration import CommittedStackConfiguration, StackSetting
+from basstler.stack.promotability import PromotionReadiness
+from basstler.stack.promotion_link import PromotionLink, PromotionTarget
 
 # %% the classifier
 
@@ -51,6 +62,15 @@ class ItemClassifier:
     have no known address.
     """
 
+    needs_resolution_label: str = field(
+        default_factory=lambda: CommittedStackConfiguration().values()[
+            StackSetting.NEEDS_RESOLUTION_LABEL
+        ]
+    )
+    """
+    The pull request label withholding a branch from promotion.
+    """
+
     def classify(self) -> None:
         """
         Fill in every item of :attr:`plan` in place.
@@ -65,6 +85,7 @@ class ItemClassifier:
             ]
             item.action = self._action_for(item)
             item.pending_start_action = self._pending_start_action_for(item)
+            item.promotion = self._promotion_for(item)
 
     def _classify_pull_request(self, item: Item) -> None:
         """
@@ -88,6 +109,64 @@ class ItemClassifier:
         item.needs_review = (
             item.live_state is LiveState.OPEN_DRAFT
             and item.status is not ItemStatus.DEFERRED
+        )
+
+    def _promotion_for(self, item: Item) -> PromotionButton | None:
+        """
+        :return: The button promoting the item's open pull request to the upstream of
+            the fork it is in, ``None`` when it is not open in a fork.
+        """
+        lineage = self.live_pull_requests.fork_lineages.get(self._repository_of(item))
+        record = item.pull_request_record
+        if lineage is None or record is None or not item.has_open_pull_request:
+            return None
+        blockers = self._readiness_of(record, lineage).blockers
+        if blockers:
+            return PromotionButton(lineage.upstream_repository, None, blockers)
+        fork = Repository.parse(self._repository_of(item))
+        link = PromotionLink.for_target(
+            PromotionTarget(
+                upstream_repository=lineage.upstream_repository,
+                upstream_base=lineage.upstream_default_branch,
+                fork_owner=fork.owner,
+            ),
+            item.branch,
+            record.title or item.title,
+            PromotionSummary().upstream_description(
+                fork.pull_request_url(item.pull_request_number)
+            ),
+        )
+        return PromotionButton(lineage.upstream_repository, link.url, [])
+
+    def _readiness_of(
+        self, record: PullRequestRecord, lineage: ForkLineage
+    ) -> PromotionReadiness:
+        """
+        :return: What decides whether the pull request may be promoted, read as the
+            stack reads it.
+        """
+        return PromotionReadiness(
+            status=BranchStatus.derive(
+                draft=record.draft,
+                merged=record.was_merged,
+                in_review=record.upstream_link is not None,
+            ),
+            parent_landed=self._base_has_landed(record, lineage),
+            withheld=self.needs_resolution_label in record.labels,
+            checks_failed=record.check_state is not None and record.check_state.failed,
+        )
+
+    def _base_has_landed(self, record: PullRequestRecord, lineage: ForkLineage) -> bool:
+        """
+        :return: Whether the branch a pull request is stacked on is a default branch, or
+            the branch of a plan item that has merged.
+        """
+        return record.base in (
+            lineage.fork_default_branch,
+            lineage.upstream_default_branch,
+        ) or any(
+            candidate.branch == record.base and candidate.live_state is LiveState.MERGED
+            for candidate in self.plan.items
         )
 
     def _repository_of(self, item: Item) -> str:

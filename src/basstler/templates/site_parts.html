@@ -79,3 +79,14 @@ siteRecheckWhenShown(siteRecountProgress);
 </span>
 {% endif %}
 {% endmacro %}
+
+{# A link to the upstream's prefilled pull request form, or the reason it cannot open yet. #}
+{% macro promotion_button(promotion) %}
+{% if promotion %}
+{% if promotion.url %}
+<a class="promote-button" href="{{ promotion.url }}" target="_blank" rel="noopener">{{ promotion.label }} ↗</a>
+{% else %}
+<span class="promote-button promote-button-disabled" aria-disabled="true" title="{{ promotion.reason }}">{{ promotion.label }} ↗</span>
+{% endif %}
+{% endif %}
+{% endmacro %}
